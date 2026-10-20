@@ -353,6 +353,31 @@ export default function Explorer() {
             </button>
           </div>
         </div>
+        <nav className="mobile-tools" aria-label="Действия на телефоне">
+          <button
+            aria-label={mobileView === 'map' ? 'Лента' : 'Карта'}
+            title={mobileView === 'map' ? 'Лента' : 'Карта'}
+            onClick={() => setMobileView(mobileView === 'map' ? 'feed' : 'map')}
+          >
+            {mobileView === 'map' ? <Grid2X2 size={20} /> : <MapIcon size={20} />}
+          </button>
+          <button
+            aria-label={`Моя поездка, мест: ${currentTrip}`}
+            title="Моя поездка"
+            className="mobile-trip"
+            onClick={() => setTripOpen(true)}
+          >
+            <Route size={20} />
+            {currentTrip > 0 && <span>{currentTrip}</span>}
+          </button>
+          <button
+            aria-label="Добавить видео"
+            title="Добавить видео"
+            onClick={() => setImportOpen(true)}
+          >
+            <Plus size={22} />
+          </button>
+        </nav>
         {filtersOpen && (
           <div className="filter-popover">
             <b>Радиус поездки из {region.originName}</b>
@@ -575,6 +600,13 @@ export default function Explorer() {
                 if (Math.abs(d) > 60) next(d < 0 ? 1 : -1);
               }}
             >
+              <button
+                className="preview-close"
+                aria-label="Закрыть место"
+                onClick={() => setActive(null)}
+              >
+                <X size={20} />
+              </button>
               <div className="preview-media">
                 <VideoPlayer place={active} />
                 {active.video && (
@@ -587,13 +619,6 @@ export default function Explorer() {
                     Смотреть видео
                   </button>
                 )}
-                <button
-                  className="preview-close"
-                  aria-label="Закрыть место"
-                  onClick={() => setActive(null)}
-                >
-                  <X size={16} />
-                </button>
                 <div className="preview-nav">
                   <button aria-label="Предыдущее место" onClick={() => next(-1)}>
                     <ArrowLeft size={15} />
@@ -734,19 +759,6 @@ export default function Explorer() {
           </button>
         </span>
       </footer>
-      <div className="mobile-bottom">
-        <button onClick={() => setMobileView(mobileView === 'map' ? 'feed' : 'map')}>
-          {mobileView === 'map' ? <Grid2X2 size={18} /> : <MapIcon size={18} />}{' '}
-          {mobileView === 'map' ? 'Лента' : 'Карта'}
-        </button>
-        <Button onClick={() => setTripOpen(true)}>
-          <Route size={17} />
-          Моя поездка <span>{currentTrip}</span>
-        </Button>
-        <button onClick={() => setImportOpen(true)} aria-label="Добавить видео">
-          <Plus size={22} />
-        </button>
-      </div>
       <ImportDialog
         region={region.name}
         open={importOpen}

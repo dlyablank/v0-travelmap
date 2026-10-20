@@ -51,18 +51,24 @@ test('discovery, author, mini-map, selected stops and trip cover stay connected'
     .click();
   await expect(reel).toHaveCount(0);
   const strip = page.getByRole('region', { name: 'Выбранные остановки' });
+  if (testInfo.project.name === 'mobile') {
+    await expect(strip).toBeHidden();
+    await page.getByRole('button', { name: 'Закрыть место', exact: true }).click();
+    await page.getByRole('button', { name: 'Лента', exact: true }).click();
+  }
   await expect(strip).toBeVisible();
   await expect(
     strip.getByRole('button', { name: 'Остановка 1: Река Сюскюянйоки', exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Закрыть место', exact: true }).click();
-  if (testInfo.project.name === 'mobile')
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
+  if (testInfo.project.name !== 'mobile')
+    await page.getByRole('button', { name: 'Закрыть место', exact: true }).click();
   await page
     .getByRole('button', { name: 'Добавить в поездку Суйсари на острове', exact: true })
     .click();
   await expect(strip.getByRole('listitem')).toHaveCount(2);
   await page.reload();
+  if (testInfo.project.name === 'mobile')
+    await page.getByRole('button', { name: 'Лента', exact: true }).click();
   await expect(strip.getByRole('listitem')).toHaveCount(2);
   await strip.getByRole('button', { name: 'Собрать поездку', exact: true }).click();
   const cover = page.getByRole('region', { name: 'Обложка поездки' });

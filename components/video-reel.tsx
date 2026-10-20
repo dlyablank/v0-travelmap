@@ -221,6 +221,22 @@ export function VideoReel({
               >
                 <summary>О месте</summary>
                 <div className="reel-info-sheet">
+                  <div className="reel-info-heading">
+                    <strong>О месте</strong>
+                    <button
+                      className="reel-info-close"
+                      aria-label="Закрыть сведения о месте"
+                      onClick={(event) => {
+                        const details = event.currentTarget.closest('details');
+                        if (details) {
+                          details.open = false;
+                          details.querySelector('summary')?.focus({ preventScroll: true });
+                        }
+                      }}
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
                   <p>{place.description}</p>
                   <VideoAttribution place={place} />
                   <button className="reel-map-button" onClick={() => onMap(place)}>

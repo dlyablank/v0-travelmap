@@ -1,10 +1,17 @@
 import { expect, test } from '@playwright/test';
 
-test('map previews play within budget and hand playback to the selected card', async ({ page }) => {
+test('map previews play within budget and hand playback to the selected card', async ({
+  page,
+}, testInfo) => {
   // Keep the test independent of external tile availability and PostgreSQL/S3.
   await page.route('https://tiles.openfreemap.org/**', (route) => route.abort());
   await page.route('**/api/places', (route) => route.fulfill({ json: { places: [] } }));
   await page.goto('/');
+  if (testInfo.project.name === 'mobile') {
+    const map = (await page.locator('.map-panel').boundingBox())!;
+    expect(Math.abs(map.y + map.height - page.viewportSize()!.height)).toBeLessThan(2);
+    await expect(page.getByRole('navigation', { name: 'Действия на телефоне' })).toBeVisible();
+  }
   const videoMarkers = page.locator('.priority-video');
   await expect(videoMarkers).toHaveCount(7);
   await expect
@@ -53,6 +60,10 @@ test('map previews play within budget and hand playback to the selected card', a
     .toBe(true);
   await expect(previews).toHaveCount(0);
   await expect(page.locator('.video-credit')).toContainText('CC BY-SA 4.0');
+  const close = page.getByRole('button', { name: 'Закрыть место', exact: true });
+  const closeBox = (await close.boundingBox())!;
+  expect(closeBox.width).toBeGreaterThanOrEqual(44);
+  expect(closeBox.height).toBeGreaterThanOrEqual(44);
   await page.getByRole('button', { name: 'Закрыть место', exact: true }).click();
   await expect.poll(() => previews.count()).toBeGreaterThan(0);
   await page.emulateMedia({ reducedMotion: 'reduce' });

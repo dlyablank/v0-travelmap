@@ -1374,11 +1374,12 @@ h1 > span:not(.heading-spark) {
   backdrop-filter: blur(5px);
 }
 .preview-close {
+  z-index: 6;
   position: absolute;
   top: 12px;
   right: 12px;
-  width: 26px;
-  height: 26px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #ffffffe8;
   display: grid;
@@ -2032,7 +2033,7 @@ h1 > span:not(.heading-spark) {
 .toast > button {
   display: flex;
 }
-.mobile-bottom {
+.mobile-tools {
   display: none;
 }
 .spin {
@@ -2427,17 +2428,24 @@ h1 > span:not(.heading-spark) {
     display: none;
   }
   .toolbar {
-    height: 102px;
+    height: 104px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 136px;
+    grid-template-rows: 38px 44px;
     padding: 8px 15px;
-    gap: 0;
+    gap: 6px;
   }
   .search-field {
+    grid-area: 1 / 1 / 2 / 3;
+    width: calc(100% - 40px);
     height: 38px;
     min-width: 0;
     margin-right: 0;
   }
   .toolbar-end {
-    margin-left: 11px;
+    grid-area: 1 / 2;
+    justify-self: end;
+    margin-left: 0;
     gap: 0;
   }
   .view-toggle {
@@ -2564,44 +2572,48 @@ h1 > span:not(.heading-spark) {
   .status-bar {
     display: none;
   }
-  .mobile-bottom {
-    height: 70px;
-    flex-shrink: 0;
+  .toolbar > .category-tabs {
+    grid-area: 2 / 1;
+    width: 100%;
+    min-width: 0;
+    margin-top: 0;
+  }
+  .mobile-tools {
+    grid-area: 2 / 2;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 15px;
-    background: #fff;
-    padding: 8px 18px calc(8px + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid #e3e8db;
-    z-index: 12;
+    order: 4;
+    gap: 2px;
+    margin: 0;
   }
-  .mobile-bottom > button:first-child {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 11px;
-    color: #7a8c6b;
-    padding: 7px 0;
-  }
-  .mobile-bottom > .button {
-    height: 42px;
-    min-width: 177px;
-  }
-  .mobile-bottom > .button span {
-    background: #fff3;
-    border-radius: 5px;
-    padding: 2px 5px;
-    font-size: 10px;
-  }
-  .mobile-bottom > button:last-child {
-    color: var(--coral);
-    width: 35px;
-    height: 35px;
-    border: 1px solid #f3d9ca;
-    border-radius: 10px;
+  .mobile-tools > button {
+    position: relative;
     display: grid;
     place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    color: #405934;
+  }
+  .mobile-tools > .mobile-trip {
+    color: var(--coral);
+    background: #fff0e9;
+  }
+  .mobile-trip > span {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 8px;
+    background: var(--coral);
+    color: #fff;
+    font-size: 9px;
+    display: grid;
+    place-items: center;
+  }
+  .explorer:has(.workspace.mobile-map) > .selected-stops {
+    display: none;
   }
   .map-region {
     font-size: 7px;
@@ -2722,12 +2734,16 @@ h1 > span:not(.heading-spark) {
     top: 8px;
   }
   .preview-close {
-    right: 7px;
+    right: 8px;
     top: 8px;
-    width: 22px;
-    height: 22px;
-    background: #fff6;
-    color: white;
+    width: 44px;
+    height: 44px;
+    background: #fafbf6;
+    color: #314434;
+    box-shadow: 0 2px 8px #16393226;
+  }
+  .preview-body {
+    padding-top: 58px;
   }
   .preview-nav > button {
     width: 21px;
@@ -3494,6 +3510,28 @@ h1 > span:not(.heading-spark) {
   line-height: 1.65;
   margin: 0 0 15px;
 }
+.reel-info-heading {
+  position: sticky;
+  top: -20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -20px -20px 12px;
+  padding: 8px 12px 8px 20px;
+  background: #fafbf6;
+  z-index: 1;
+}
+.reel-info-close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #e8eedf;
+  color: #314434;
+}
 .video-reel .reel-info-sheet .creator-card {
   color: #415344;
   margin: 15px 0;
@@ -3576,6 +3614,11 @@ h1 > span:not(.heading-spark) {
   }
   .reel-info-sheet {
     padding: 16px;
+  }
+  .reel-info-heading {
+    top: -16px;
+    margin: -16px -16px 12px;
+    padding-left: 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

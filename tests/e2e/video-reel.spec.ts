@@ -86,6 +86,11 @@ test('feed previews loop and the vertical reel cycles with a single active playe
   await expect(open).toBeFocused();
   await open.click();
   await reel.locator('.reel-place-details > summary').click();
+  await reel.getByRole('button', { name: 'Закрыть сведения о месте', exact: true }).click();
+  await expect(reel.locator('.reel-info-sheet')).toBeHidden();
+  await expect(reel).toBeVisible();
+  await expect(reel.locator('.reel-place-details > summary')).toBeFocused();
+  await reel.locator('.reel-place-details > summary').click();
   await reel.getByRole('button', { name: 'Показать на карте', exact: true }).click();
   await expect(reel).toHaveCount(0);
   await expect(page.locator('.active-preview h2')).toHaveText('Суйсари на острове');
