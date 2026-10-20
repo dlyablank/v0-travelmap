@@ -44,6 +44,21 @@ test('map previews play within budget and hand playback to the selected card', a
     )
     .toBe(true);
   await expect(previews).toHaveCount(5);
+  expect(
+    await previews.evaluateAll((videos) =>
+      videos.every((element) => {
+        const video = element as HTMLVideoElement;
+        return (
+          video.muted &&
+          video.defaultMuted &&
+          video.playsInline &&
+          video.autoplay &&
+          getComputedStyle(video).opacity === '1' &&
+          !!video.poster
+        );
+      }),
+    ),
+  ).toBe(true);
 
   const toggle = page.getByRole('button', { name: 'Видео на карте', exact: true });
   await toggle.click();
@@ -75,4 +90,56 @@ test('map previews play within budget and hand playback to the selected card', a
   await expect(page.getByRole('button', { name: 'Показать Остров Кижи', exact: true })).toHaveCount(
     0,
   );
+});
+
+test('a browser autoplay refusal retries map previews on the first touch', async ({
+  page,
+}, testInfo) => {
+  await page.addInitScript(() => {
+    const nativePlay = HTMLMediaElement.prototype.play;
+    let touched = false;
+    document.addEventListener(
+      'click',
+      () => {
+        touched = true;
+      },
+      true,
+    );
+    HTMLMediaElement.prototype.play = function () {
+      if (this.closest('.map-wrap') && !touched) {
+        // Simulate mobile browser policy, including its refusal of native autoplay.
+        this.autoplay = false;
+        return Promise.reject(new DOMException('User gesture required', 'NotAllowedError'));
+      }
+      return nativePlay.call(this);
+    };
+  });
+  await page.route('https://tiles.openfreemap.org/**', (route) => route.abort());
+  await page.route('**/api/places', (route) => route.fulfill({ json: { places: [] } }));
+  await page.goto('/');
+  const previews = page.locator('.map-wrap video');
+  await expect(previews).toHaveCount(5);
+  await expect
+    .poll(() =>
+      previews.evaluateAll((videos) => videos.every((v) => (v as HTMLVideoElement).paused)),
+    )
+    .toBe(true);
+  const search = page.getByRole('textbox', { name: 'Поиск по городу и региону' });
+  if (testInfo.project.name === 'mobile') await search.tap();
+  else await search.click();
+  await expect
+    .poll(() =>
+      previews.evaluateAll(
+        (videos) =>
+          videos.length === 5 &&
+          videos.every(
+            (v) => !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.2,
+          ),
+      ),
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: 'Видео на карте', exact: true }).click();
+  await expect(previews).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Поиск по городу и региону' }).click();
+  await expect(previews).toHaveCount(0);
 });
