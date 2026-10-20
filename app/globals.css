@@ -292,6 +292,15 @@ button:hover:not(:disabled) {
   padding-left: 9px;
   white-space: nowrap;
 }
+.search-region select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  max-width: 145px;
+  cursor: pointer;
+}
 .search-field button {
   padding: 0;
   display: flex;
@@ -1213,6 +1222,25 @@ h1 > span:not(.heading-spark) {
 }
 .video-marker.priority-video.is-active {
   z-index: 5;
+}
+.map-marker-connectors {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  stroke: #c95943;
+  stroke-width: 1;
+  fill: #e86648;
+}
+.map-wrap[data-region='kolomna'] .priority-video {
+  width: 50px;
+  height: 76px;
+}
+.map-wrap[data-region='kolomna'] .priority-video b {
+  max-width: 90px;
+  font-size: 8px;
 }
 .video-marker.is-active:after {
   border-top-color: var(--coral);

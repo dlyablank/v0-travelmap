@@ -1,5 +1,6 @@
 import type { Place, Category } from './types';
 import { demoVideos } from './demo-videos';
+import { kolomnaPlaces } from './kolomna-data';
 // Coordinates mark the named landmark (not hotel entrances or invented businesses).
 const points: [string, string, number, number, string, Category, string, number][] = [
   [
@@ -293,8 +294,8 @@ const points: [string, string, number, number, string, Category, string, number]
     60,
   ],
 ];
-export const places: Place[] = points.map(
-  ([id, name, latitude, longitude, city, category, description, visitMinutes]) => ({
+export const places: Place[] = [
+  ...points.map(([id, name, latitude, longitude, city, category, description, visitMinutes]) => ({
     id,
     name,
     latitude,
@@ -312,6 +313,7 @@ export const places: Place[] = points.map(
     imagePage:
       demoVideos[id]?.credit?.sourceUrl ||
       `https://commons.wikimedia.org/w/index.php?search=${encodeURIComponent(name)}&title=Special:MediaSearch&type=image`,
-  }),
-);
+  })),
+  ...kolomnaPlaces,
+];
 export const placeById = Object.fromEntries(places.map((p) => [p.id, p]));

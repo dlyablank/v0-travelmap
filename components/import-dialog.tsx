@@ -9,12 +9,14 @@ import { useExplorer } from '@/lib/store';
 import { videoThumbnail } from '@/lib/video-thumbnail';
 export type DraftLocation = { latitude: number; longitude: number };
 export function ImportDialog({
+  region,
   open,
   onOpenChange,
   location,
   onPick,
   onAdded,
 }: {
+  region: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   location: DraftLocation | null;
@@ -54,6 +56,7 @@ export function ImportDialog({
     const latitude = lat !== '' ? Number(lat) : location?.latitude;
     const longitude = lng !== '' ? Number(lng) : location?.longitude;
     const parsed = placeInput.safeParse({
+      region,
       name,
       description,
       city,

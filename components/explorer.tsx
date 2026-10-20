@@ -27,6 +27,7 @@ import {
   LoaderCircle,
 } from 'lucide-react';
 import { places as demoPlaces } from '@/lib/data';
+import { regions, getRegion, inRegion } from '@/lib/regions';
 import { categories, type Place, type RouteResult } from '@/lib/types';
 import { haversine } from '@/lib/routing';
 import { useExplorer } from '@/lib/store';
@@ -44,7 +45,7 @@ const ExplorerMap = dynamic(() => import('./explorer-map'), {
   ssr: false,
   loading: () => (
     <div className="map-loading">
-      <LoaderCircle className="spin" /> Разворачиваем карту Карелии…
+      <LoaderCircle className="spin" /> Разворачиваем карту…
     </div>
   ),
 });
@@ -78,7 +79,8 @@ export default function Explorer() {
   const [about, setAbout] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const { trip, saved, customPlaces, toggleSaved, toggleTrip } = useExplorer();
+  const { trip, saved, customPlaces, toggleSaved, toggleTrip, regionId, setRegion } = useExplorer();
+  const region = getRegion(hydrated ? regionId : 'karelia');
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const touch = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,23 +111,34 @@ export default function Explorer() {
     () =>
       Array.from(
         new Map(
-          [...serverPlaces, ...(hydrated ? customPlaces : [])].map((p) => [p.id, p]),
+          [...demoPlaces, ...serverPlaces, ...(hydrated ? customPlaces : [])].map((p) => [p.id, p]),
         ).values(),
       ),
     [serverPlaces, customPlaces, hydrated],
   );
+  const regionPlaces = useMemo(
+    () => allPlaces.filter((p) => inRegion(p, region)),
+    [allPlaces, region],
+  );
   const filtered = useMemo(
     () =>
-      allPlaces.filter(
+      regionPlaces.filter(
         (p) =>
           (category === 'Все места' || p.category === category) &&
           (!savedOnly || saved.includes(p.id)) &&
           `${p.name} ${p.city} ${p.region}`.toLowerCase().includes(query.toLowerCase()) &&
           (timeFilter === 'any' ||
-            haversine({ latitude: 61.6991, longitude: 30.6793 }, p) / 1000 / 55 <=
+            haversine(
+              region.id === 'karelia'
+                ? { latitude: 61.6991, longitude: 30.6793 }
+                : { latitude: region.center[1], longitude: region.center[0] },
+              p,
+            ) /
+              1000 /
+              55 <=
               Number(timeFilter)),
       ),
-    [allPlaces, category, savedOnly, saved, query, timeFilter],
+    [regionPlaces, region, category, savedOnly, saved, query, timeFilter],
   );
   const selectPlace = useCallback((p: Place) => {
     setActive(p);
@@ -237,9 +250,31 @@ export default function Explorer() {
               <X size={15} />
             </button>
           )}
-          <span className="search-region">
-            Карелия <ChevronDown size={13} />
-          </span>
+          <label className="search-region">
+            <select
+              aria-label="Регион путешествия"
+              disabled={!hydrated}
+              value={region.id}
+              onChange={(e) => {
+                setRegion(e.target.value);
+                setActive(null);
+                setReelId(null);
+                setRoute(null);
+                setTripOpen(false);
+                setQuery('');
+                setCategory('Все места');
+                setTimeFilter('any');
+                setLocation(null);
+              }}
+            >
+              {regions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} />
+          </label>
         </div>
         <div className="category-tabs">
           {categories.map((c) => {
@@ -294,7 +329,7 @@ export default function Explorer() {
         </div>
         {filtersOpen && (
           <div className="filter-popover">
-            <b>Радиус поездки из Сортавалы</b>
+            <b>Радиус поездки из {region.originName}</b>
             <label>
               Ориентир по времени
               <select
@@ -331,7 +366,7 @@ export default function Explorer() {
             <div className="eyebrow">
               <span /> СМОТРЕТЬ. ВЫБИРАТЬ. ЕХАТЬ.
             </div>
-            <h1>{savedOnly ? 'Ваши открытия' : 'Выходные в Карелии'}</h1>
+            <h1>{savedOnly ? 'Ваши открытия' : region.heading}</h1>
             <p>
               {savedOnly
                 ? 'Любимые места для следующей поездки.'
@@ -339,10 +374,10 @@ export default function Explorer() {
             </p>
             <div className="region-caption">
               <MapPin size={13} />
-              <b>Карелия</b>
+              <b>{region.name}</b>
               <span>·</span>
               <span>
-                {allPlaces.length} мест · {allPlaces.filter((p) => p.video).length} видео
+                {regionPlaces.length} мест · {regionPlaces.filter((p) => p.video).length} видео
               </span>
             </div>
           </div>
@@ -475,6 +510,8 @@ export default function Explorer() {
         </section>
         <section className="map-panel" aria-label="Интерактивная карта">
           <ExplorerMap
+            key={region.id}
+            region={region}
             places={filtered}
             active={active}
             onSelect={selectPlace}
@@ -674,6 +711,7 @@ export default function Explorer() {
         </button>
       </div>
       <ImportDialog
+        region={region.name}
         open={importOpen}
         onOpenChange={setImportOpen}
         location={location}
@@ -721,11 +759,12 @@ export default function Explorer() {
             </p>
           </div>
           <p className="small-note">
-            29 реальных точек Карелии. В семи местах доступны короткие видео с открытой лицензией:
-            Кижи, Койриноя, Кивач, Суйсари, Сюскюянйоки, Иййоки и паровоз в Рускеале. Остальные
-            фотографии региона служат вдохновением, а не точным видом каждой локации. Для островов
-            нужен водный транспорт. Сохранённое хранится в браузере; серверное хранение доступно при
-            подключённой базе.
+            Карелия, Коломна и окрестности — {allPlaces.length} мест и{' '}
+            {allPlaces.filter((p) => p.video).length} коротких видео. Коломенские ролики — семь
+            фрагментов двух прогулок Андрея Елбаева с лицензией CC BY 3.0. Автор и источник указаны
+            у каждого видео. Фотографии региона и иллюстрации не заменяют точный вид места. Для
+            островов нужен водный транспорт. Сохранённое хранится в браузере; серверное хранение
+            доступно при подключённой базе.
           </p>
           <Button onClick={() => setAbout(false)}>
             Начать исследовать <ArrowUpRight size={17} />

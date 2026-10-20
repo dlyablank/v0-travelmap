@@ -1,4 +1,5 @@
 import type { Place } from './types';
+import { kolomnaVideos } from './kolomna-videos';
 
 const shareAlike = 'https://creativecommons.org/licenses/by-sa/4.0/';
 const recordedAt: Record<string, string> = {
@@ -25,6 +26,7 @@ function excerpt(id: string, author: string, pageId: number): NonNullable<Place[
   };
 }
 export const demoVideos: Record<string, NonNullable<Place['video']>> = {
+  ...kolomnaVideos,
   kivach: excerpt('kivach', 'Avsolov', 114966475),
   suisaari: excerpt('suisaari', '基日島', 112508381),
   syskyanjoki: excerpt('syskyanjoki', '基日島', 112925980),

@@ -3,7 +3,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Weekend Explorer — выходные начинаются здесь',
   description:
-    'Откройте Карелию через карту впечатлений. Сохраняйте места и собирайте свой маршрут на выходные.',
+    'Откройте Карелию, Коломну и окрестности через карту и короткие видео. Сохраняйте места и собирайте свой маршрут на выходные.',
 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

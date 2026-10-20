@@ -3,6 +3,9 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Place } from './types';
 type State = {
+  regionId: string;
+  regionTrips: Record<string, string[]>;
+  setRegion: (id: string) => void;
   trip: string[];
   durationDays: number;
   transportMode: 'car' | 'walk';
@@ -18,6 +21,18 @@ type State = {
 export const useExplorer = create<State>()(
   persist(
     (set) => ({
+      regionId: 'karelia',
+      regionTrips: {},
+      setRegion: (regionId) =>
+        set((s) =>
+          s.regionId === regionId
+            ? {}
+            : {
+                regionId,
+                trip: s.regionTrips[regionId] || [],
+                regionTrips: { ...s.regionTrips, [s.regionId]: s.trip },
+              },
+        ),
       trip: [],
       durationDays: 1,
       transportMode: 'car',

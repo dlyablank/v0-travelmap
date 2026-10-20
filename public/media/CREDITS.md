@@ -2,11 +2,23 @@
 
 - `karelia.jpg`: regional photograph from the Russian Travel educational asset set, retained from https://github.com/dacorm/russian-travel/blob/main/images/place-karelia.jpg (source may use master). It depicts Karelia in general, not each named stop. It is not a video, and no recorded visit to individual locations is implied. The original educational source does not identify the photographer or grant a separate production license; replace with your own licensed location-specific imagery before public commercial distribution.
 - `fallback.svg`: original landscape illustration made for this application. Used whenever media cannot load.
-- Seven open travel videos are bundled in `videos/`; see below. YouTube uses the official privacy-enhanced embed, with an original-source link. TikTok and Instagram use original-source links.
+- Fourteen short travel videos are bundled in `videos/`; see below. YouTube uses the official privacy-enhanced embed, with an original-source link. TikTok and Instagram use original-source links.
 - Inter: Rasmus Andersson, SIL Open Font License; see `/fonts/OFL.txt`.
 - Geographic data: Natural Earth, public domain. Source: https://github.com/nvkelso/natural-earth-vector, 50m land and 10m lakes, filtered to the region. These are overview polygons, not navigational road data.
 
-## Short map videos (verified 2026-10-20)
+## Kolomna excerpts (added 2026-10-20)
+
+Seven different geographic scenes from **two** travel walks by **Андрей Елбаев / yelbayev**, original editing by **Лев Дьяконов**. These are not seven independent source films. The source pages declare [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/); Commons currently marks both external-source uploads as awaiting independent license review. No direct author permission or completed independent review is claimed.
+
+- [Part 1 on Commons](https://commons.wikimedia.org/w/index.php?curid=131591655), [YouTube original](https://www.youtube.com/watch?v=G_TN_YovO80): `kolomna-kremlin` at 21:38; `kolomna-lazhechnikova` at 33:55.
+- [Part 2 on Commons](https://commons.wikimedia.org/w/index.php?curid=131591995), [YouTube original](https://www.youtube.com/watch?v=HJmxirQ6u8M): `kolomna-zaytseva` at 00:30; `kolomna-viewpoint` at 03:00; `kolomna-pastila` at 11:00; `kolomna-golutvin` at 36:42; `kolomna-strelka` at 39:10.
+- [Author channel](https://www.youtube.com/@yelbayev). Author/source/license links appear in the interface. No endorsement is implied.
+- Changes: 15-second excerpts, resized from Commons 480p VP9 derivatives to 854×480 H.264 MP4, audio removed, faststart. Previews: first 7 seconds at 426×240, muted. JPG posters: frame at 2 seconds. CSS crops portrait previews and the video reel. These media assets and posters retain CC BY 3.0, separately from application code.
+- Full source/clip metadata: `videos/KOLOMNA-SOURCES.json`. Source dates are metadata dates of the original works, not independently verified shooting dates; no exact shooting dates are displayed.
+- Kolomna overview rivers: public-domain [Natural Earth 10m rivers/lake centerlines](https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_10m_rivers_lake_centerlines.geojson), filtered to the surrounding region in `/kolomna-rivers.geojson`. Generalized overview data, not detailed riverbank geometry or navigation.
+- Bobrenev Monastery and Zaraysk Kremlin currently use the existing local fallback illustration, not a photograph or video of those places.
+
+## Karelia short map videos (verified 2026-10-20)
 
 Five additional clips (all **CC BY-SA 4.0**, including derived MP4s, muted previews and JPG posters):
 

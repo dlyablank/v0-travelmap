@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { Place, RouteResult } from '@/lib/types';
 import { useExplorer } from '@/lib/store';
+import { getRegion } from '@/lib/regions';
 import { optimizeStops } from '@/lib/routing';
 import { distanceLabel, timeLabel } from '@/lib/utils';
 import { PlaceImage } from './place-image';
@@ -42,6 +43,8 @@ export function TripPanel({
     toggleTrip = useExplorer((s) => s.toggleTrip),
     reorder = useExplorer((s) => s.reorder);
   const stops = trip.map((id) => places.find((p) => p.id === id)).filter((p): p is Place => !!p);
+  const regionId = useExplorer((s) => s.regionId);
+  const region = getRegion(regionId);
   const days = useExplorer((s) => s.durationDays),
     setDays = useExplorer((s) => s.setDays);
   const mode = useExplorer((s) => s.transportMode),
@@ -98,7 +101,7 @@ export function TripPanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: 'Мои выходные в Карелии',
+          title: region.heading,
           durationDays: days,
           transportMode: mode,
           stops: trip,
@@ -117,7 +120,7 @@ export function TripPanel({
       [
         JSON.stringify(
           {
-            title: 'Мои выходные в Карелии',
+            title: region.heading,
             durationDays: days,
             transportMode: mode,
             stops,
@@ -132,7 +135,7 @@ export function TripPanel({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'weekend-karelia.json';
+    a.download = `weekend-${region.id}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -183,7 +186,7 @@ export function TripPanel({
               <br />А дальше — соберём ваш маршрут.
             </p>
             <Button variant="outline" onClick={onClose}>
-              Исследовать Карелию <ArrowUpRight size={17} />
+              Исследовать регион <ArrowUpRight size={17} />
             </Button>
           </div>
         ) : (

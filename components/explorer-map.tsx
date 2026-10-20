@@ -14,11 +14,13 @@ import {
 } from 'lucide-react';
 import { createMapVideoPreview } from '@/lib/map-video-preview';
 import type { Place, RouteResult } from '@/lib/types';
+import type { ExplorerRegion } from '@/lib/regions';
 const localStyle: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     land: { type: 'geojson', data: '/land.geojson' },
     lakes: { type: 'geojson', data: '/lakes.geojson' },
+    kolomnaRivers: { type: 'geojson', data: '/kolomna-rivers.geojson' },
   },
   layers: [
     { id: 'water', type: 'background', paint: { 'background-color': '#c4dce4' } },
@@ -34,9 +36,16 @@ const localStyle: maplibregl.StyleSpecification = {
       source: 'lakes',
       paint: { 'fill-color': '#c4dce4', 'fill-outline-color': '#b1d0d9' },
     },
+    {
+      id: 'kolomna-rivers',
+      type: 'line',
+      source: 'kolomnaRivers',
+      paint: { 'line-color': '#b1d0d9', 'line-width': 6 },
+    },
   ],
 };
 export default function ExplorerMap({
+  region,
   places,
   active,
   onSelect,
@@ -46,6 +55,7 @@ export default function ExplorerMap({
   onReady,
   previewsVisible = true,
 }: {
+  region: ExplorerRegion;
   places: Place[];
   active: Place | null;
   onSelect: (p: Place) => void;
@@ -72,12 +82,23 @@ export default function ExplorerMap({
     if (!el.current) return;
     let destroyed = false;
     let m: maplibregl.Map;
+    const startingStyle: maplibregl.StyleSpecification = {
+      ...localStyle,
+      layers: [
+        {
+          id: 'water',
+          type: 'background',
+          paint: { 'background-color': region.id === 'karelia' ? '#c4dce4' : '#e3e9d9' },
+        },
+        ...localStyle.layers.slice(1),
+      ],
+    };
     try {
       m = new maplibregl.Map({
         container: el.current,
-        style: localStyle,
-        center: [32.1, 61.94],
-        zoom: 6.5,
+        style: startingStyle,
+        center: region.center,
+        zoom: region.zoom,
         minZoom: 4,
         maxZoom: 17,
         attributionControl: { compact: true },
@@ -131,7 +152,7 @@ export default function ExplorerMap({
       map.current?.remove();
       map.current = null;
     };
-  }, []);
+  }, [region]);
   useEffect(() => {
     const current = map.current;
     if (!current || !ready) return;
@@ -140,6 +161,89 @@ export default function ExplorerMap({
       string,
       { marker: maplibregl.Marker; preview?: ReturnType<typeof createMapVideoPreview> }
     >();
+    const connectorLayer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    connectorLayer.classList.add('map-marker-connectors');
+    m.getContainer().append(connectorLayer);
+    function arrangeNearbyVideos() {
+      connectorLayer.replaceChildren();
+      if (region.id !== 'kolomna' || m.isMoving()) return;
+      const width = m.getContainer().clientWidth,
+        height = m.getContainer().clientHeight;
+      const occupied: { x: number; y: number }[] = [];
+      let needsCompactLayout = false;
+      const candidates: [number, number][] = [];
+      for (let row = -3; row <= 3; row++)
+        for (let col = -3; col <= 3; col++) candidates.push([col * 96, row * 116]);
+      candidates.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+      for (const { marker, preview } of records.values()) {
+        if (!preview) continue;
+        const point = m.project(marker.getLngLat());
+        if (point.x < 0 || point.x > width || point.y < 0 || point.y > height) {
+          marker.setOffset([0, 0]);
+          continue;
+        }
+        const available = candidates.find(([dx, dy]) => {
+          const x = point.x + dx,
+            y = point.y + dy;
+          return (
+            x >= 48 &&
+            x <= width - 48 &&
+            y >= 160 &&
+            y <= height - 75 &&
+            occupied.every((other) => Math.abs(x - other.x) >= 94 || Math.abs(y - other.y) >= 114)
+          );
+        });
+        if (!available) needsCompactLayout = true;
+        const offset = available || [0, 0];
+        marker.setOffset(offset);
+        occupied.push({ x: point.x + offset[0], y: point.y + offset[1] });
+        if (offset[0] || offset[1]) {
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', String(point.x));
+          line.setAttribute('y1', String(point.y));
+          line.setAttribute('x2', String(point.x + offset[0]));
+          line.setAttribute('y2', String(point.y + offset[1]));
+          const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          dot.setAttribute('cx', String(point.x));
+          dot.setAttribute('cy', String(point.y));
+          dot.setAttribute('r', '3');
+          connectorLayer.append(line, dot);
+        }
+      }
+      if (needsCompactLayout) {
+        connectorLayer.replaceChildren();
+        const visible = [...records.values()].filter(({ marker, preview }) => {
+          const p = m.project(marker.getLngLat());
+          return preview && p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height;
+        });
+        const columns = Math.max(1, Math.floor((width - 96) / 96) + 1);
+        const rows = Math.ceil(visible.length / columns);
+        const top = Math.min(190, Math.max(100, height - 75 - (rows - 1) * 116));
+        const slots: { x: number; y: number }[] = [];
+        for (let row = 0; row < rows; row++)
+          for (let col = 0; col < columns; col++)
+            slots.push({
+              x: 48 + (col * (width - 96)) / Math.max(1, columns - 1),
+              y: top + (row * (height - 75 - top)) / Math.max(1, rows - 1),
+            });
+        for (const { marker } of visible) {
+          const p = m.project(marker.getLngLat());
+          slots.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
+          const slot = slots.shift()!;
+          marker.setOffset([slot.x - p.x, slot.y - p.y]);
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', String(p.x));
+          line.setAttribute('y1', String(p.y));
+          line.setAttribute('x2', String(slot.x));
+          line.setAttribute('y2', String(slot.y));
+          const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          dot.setAttribute('cx', String(p.x));
+          dot.setAttribute('cy', String(p.y));
+          dot.setAttribute('r', '3');
+          connectorLayer.append(line, dot);
+        }
+      }
+    }
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
     const connection = (
       navigator as Navigator & { connection?: EventTarget & { saveData?: boolean } }
@@ -279,25 +383,31 @@ export default function ExplorerMap({
           records.delete(key);
         }
       markers.current = [...records.values()].map((r) => r.marker);
+      arrangeNearbyVideos();
       syncPreviews();
     }
-    m.on('movestart', syncPreviews);
+    function moving() {
+      connectorLayer.replaceChildren();
+      syncPreviews();
+    }
+    m.on('movestart', moving);
     m.on('sourcedata', refresh);
     m.on('moveend', refresh);
-    m.on('resize', syncPreviews);
+    m.on('resize', refresh);
     document.addEventListener('visibilitychange', syncPreviews);
     motion.addEventListener('change', syncPreviews);
     connection?.addEventListener('change', syncPreviews);
-    const observer = new ResizeObserver(syncPreviews);
+    const observer = new ResizeObserver(refresh);
     observer.observe(m.getContainer());
     refresh();
     return () => {
       observer.disconnect();
+      connectorLayer.remove();
       document.removeEventListener('visibilitychange', syncPreviews);
       motion.removeEventListener('change', syncPreviews);
       connection?.removeEventListener('change', syncPreviews);
-      m.off('movestart', syncPreviews);
-      m.off('resize', syncPreviews);
+      m.off('movestart', moving);
+      m.off('resize', refresh);
       m.off('sourcedata', refresh);
       m.off('moveend', refresh);
       records.forEach((r) => {
@@ -306,7 +416,7 @@ export default function ExplorerMap({
       });
       records.clear();
     };
-  }, [places, ready, active, autoplay, previewsVisible, pickMode]);
+  }, [places, ready, active, autoplay, previewsVisible, pickMode, region]);
   useEffect(() => {
     const m = map.current;
     if (!m || !ready || framedVideos.current) return;
@@ -317,10 +427,10 @@ export default function ExplorerMap({
     videos.forEach((p) => bounds.extend([p.longitude, p.latitude]));
     m.fitBounds(bounds, {
       padding: { top: 150, bottom: 110, left: 75, right: 75 },
-      maxZoom: 7.5,
+      maxZoom: region.previewZoom,
       duration: 0,
     });
-  }, [ready, places, active, route, pickMode]);
+  }, [ready, places, active, route, pickMode, region]);
   useEffect(() => {
     if (active && ready)
       map.current?.flyTo({
@@ -369,12 +479,15 @@ export default function ExplorerMap({
   useEffect(() => {
     const m = map.current;
     if (!m || !ready || !local) return;
-    const labels: [string, number, number][] = [
-      ['ЛАДОЖСКОЕ\nОЗЕРО', 31.25, 61.05],
-      ['ОНЕЖСКОЕ\nОЗЕРО', 35.4, 61.65],
-      ['Сортавала', 30.68, 61.7],
-      ['Петрозаводск', 34.39, 61.79],
-    ];
+    const labels: [string, number, number][] =
+      region.id === 'karelia'
+        ? [
+            ['ЛАДОЖСКОЕ\nОЗЕРО', 31.25, 61.05],
+            ['ОНЕЖСКОЕ\nОЗЕРО', 35.4, 61.65],
+            ['Сортавала', 30.68, 61.7],
+            ['Петрозаводск', 34.39, 61.79],
+          ]
+        : [['Коломна', 38.752, 55.103]];
     const list = labels.map(([text, lng, lat]) => {
       const element = document.createElement('div');
       element.className = text.includes('ОЗЕРО') ? 'geography-label lake-name' : 'geography-label';
@@ -383,9 +496,9 @@ export default function ExplorerMap({
       return new maplibregl.Marker({ element }).setLngLat([lng, lat]).addTo(m);
     });
     return () => list.forEach((l) => l.remove());
-  }, [ready, local]);
+  }, [ready, local, region]);
   return (
-    <div className={`map-wrap ${pickMode ? 'picking' : ''}`}>
+    <div className={`map-wrap ${pickMode ? 'picking' : ''}`} data-region={region.id}>
       <div ref={el} className="map-canvas" data-testid="map" />
       <button
         className="map-video-toggle"
@@ -402,7 +515,7 @@ export default function ExplorerMap({
       )}
       <div className="map-region">
         <span className="live-dot" />
-        КАРЕЛИЯ, РОССИЯ <span>↗</span>
+        {region.id === 'karelia' ? 'КАРЕЛИЯ' : 'КОЛОМНА'}, РОССИЯ <span>↗</span>
       </div>
       <div className="map-controls">
         <button aria-label="Увеличить масштаб" onClick={() => map.current?.zoomIn()}>
@@ -414,7 +527,13 @@ export default function ExplorerMap({
         <i />
         <button
           aria-label="Показать весь регион"
-          onClick={() => map.current?.flyTo({ center: [32.1, 61.94], zoom: 6.5 })}
+          onClick={() => {
+            const bounds = new maplibregl.LngLatBounds();
+            places.forEach((p) => bounds.extend([p.longitude, p.latitude]));
+            if (places.length)
+              map.current?.fitBounds(bounds, { padding: 80, maxZoom: region.previewZoom });
+            else map.current?.flyTo({ center: region.center, zoom: region.zoom });
+          }}
         >
           <LocateFixed size={19} />
         </button>

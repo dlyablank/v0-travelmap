@@ -70,7 +70,13 @@ export function VideoPlayer({
           referrerPolicy="strict-origin-when-cross-origin"
         />
       )}
-      {!video && <div className="photo-label">Фото региона · добавьте своё видео</div>}
+      {!video && (
+        <div className="photo-label">
+          {place.thumbnailUrl.endsWith('.svg')
+            ? 'Иллюстрация · видео пока нет'
+            : 'Фото региона · добавьте своё видео'}
+        </div>
+      )}
       {error && (
         <div className="video-error">Видео не загрузилось. Проверьте соединение или источник.</div>
       )}

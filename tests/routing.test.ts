@@ -32,13 +32,18 @@ describe('trip planning', () => {
     expect(youtubeId('https://youtube.com/shorts/abcdefghijk')).toBe('abcdefghijk');
     expect(youtubeId('https://youtube.com/shorts/bad')).toBeNull();
   });
-  it('contains 29 unique named geographic points with plausible regional coordinates', () => {
-    expect(places).toHaveLength(29);
-    expect(new Set(places.map((p) => p.id)).size).toBe(29);
+  it('contains unique geographic points in Karelia and Kolomna with seven videos per region', () => {
+    expect(places).toHaveLength(38);
+    expect(new Set(places.map((p) => p.id)).size).toBe(38);
     expect(
-      places.every(
-        (p) => p.latitude > 60 && p.latitude < 67 && p.longitude > 29 && p.longitude < 36,
+      places.every((p) =>
+        p.region === 'Карелия'
+          ? p.latitude > 60 && p.latitude < 67 && p.longitude > 29 && p.longitude < 36
+          : p.latitude > 54.7 && p.latitude < 55.3 && p.longitude > 38.5 && p.longitude < 39,
       ),
     ).toBe(true);
+    for (const region of ['Карелия', 'Коломна и окрестности']) {
+      expect(places.filter((p) => p.region === region && p.video)).toHaveLength(7);
+    }
   });
 });
