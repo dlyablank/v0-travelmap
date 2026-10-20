@@ -215,25 +215,29 @@ export default function Explorer() {
     () => allPlaces.filter((p) => inRegion(p, region)),
     [allPlaces, region],
   );
-  const filtered = useMemo(
+  const travelOrigin = useMemo(
     () =>
-      regionPlaces.filter(
+      region.id === 'karelia'
+        ? { latitude: 61.6991, longitude: 30.6793 }
+        : { latitude: region.center[1], longitude: region.center[0] },
+    [region],
+  );
+  const radiusOrigin = timeFilter === 'any' ? null : travelOrigin;
+  const mapPlaces = useMemo(
+    () =>
+      allPlaces.filter(
         (p) =>
           (category === 'Все места' || p.category === category) &&
           (!savedOnly || (saved.includes(p.id) && placeLocationId(p) === locationId)) &&
           `${p.name} ${p.city} ${p.region}`.toLowerCase().includes(query.toLowerCase()) &&
-          (timeFilter === 'any' ||
-            haversine(
-              region.id === 'karelia'
-                ? { latitude: 61.6991, longitude: 30.6793 }
-                : { latitude: region.center[1], longitude: region.center[0] },
-              p,
-            ) /
-              1000 /
-              55 <=
-              Number(timeFilter)),
+          (!radiusOrigin || haversine(radiusOrigin, p) / 1000 / 55 <= Number(timeFilter)),
       ),
-    [regionPlaces, region, category, savedOnly, saved, query, timeFilter, locationId],
+    [allPlaces, radiusOrigin, category, savedOnly, saved, query, timeFilter, locationId],
+  );
+  const filtered = useMemo(() => mapPlaces.filter((p) => inRegion(p, region)), [mapPlaces, region]);
+  const previewPlaces = useMemo(
+    () => (active ? mapPlaces.filter((p) => p.region === active.region) : filtered),
+    [active, mapPlaces, filtered],
   );
   const selectPlace = useCallback((p: Place) => {
     setActive(p);
@@ -266,7 +270,9 @@ export default function Explorer() {
   function openReel(place: Place, fromMap = false) {
     reelReturn.current = { fromMap, place };
     setActive(null);
-    const videos = filtered.filter((p) => p.video);
+    const videos = (fromMap ? mapPlaces.filter((p) => p.region === place.region) : filtered).filter(
+      (p) => p.video,
+    );
     const start = videos.findIndex((p) => p.id === place.id);
     setReelPlaces(
       start < 0 ? [place, ...videos] : [...videos.slice(start), ...videos.slice(0, start)],
@@ -306,9 +312,9 @@ export default function Explorer() {
     setRoute(null);
   }
   function next(d: number) {
-    if (!active || !filtered.length) return;
-    const i = filtered.findIndex((p) => p.id === active.id);
-    selectPlace(filtered[(i + d + filtered.length) % filtered.length]);
+    if (!active || !previewPlaces.length) return;
+    const i = previewPlaces.findIndex((p) => p.id === active.id);
+    selectPlace(previewPlaces[(i + d + previewPlaces.length) % previewPlaces.length]);
   }
   useEffect(() => {
     function key(e: KeyboardEvent) {
@@ -321,17 +327,17 @@ export default function Explorer() {
         return;
       if (e.key === 'Escape') setActive(null);
       if (e.key === 'ArrowRight' && active) {
-        const i = filtered.findIndex((p) => p.id === active.id);
-        setActive(filtered[(i + 1) % filtered.length] || null);
+        const i = previewPlaces.findIndex((p) => p.id === active.id);
+        setActive(previewPlaces[(i + 1) % previewPlaces.length] || null);
       }
       if (e.key === 'ArrowLeft' && active) {
-        const i = filtered.findIndex((p) => p.id === active.id);
-        setActive(filtered[(i - 1 + filtered.length) % filtered.length] || null);
+        const i = previewPlaces.findIndex((p) => p.id === active.id);
+        setActive(previewPlaces[(i - 1 + previewPlaces.length) % previewPlaces.length] || null);
       }
     }
     document.addEventListener('keydown', key);
     return () => document.removeEventListener('keydown', key);
-  }, [active, filtered, importOpen, about, reelId]);
+  }, [active, previewPlaces, importOpen, about, reelId]);
   const currentTrip = hydrated ? trip.length : 0;
   const selectedStops = hydrated
     ? trip.map((id) => allPlaces.find((p) => p.id === id)).filter((p): p is Place => !!p)
@@ -708,9 +714,8 @@ export default function Explorer() {
         </section>
         <section className="map-panel" aria-label="Интерактивная карта">
           <ExplorerMap
-            key={region.id}
             region={region}
-            places={filtered}
+            places={mapPlaces}
             onNeedVideos={loadMapVideos}
             active={active}
             onSelect={selectPlace}
@@ -772,8 +777,8 @@ export default function Explorer() {
                     <ArrowLeft size={15} />
                   </button>
                   <span>
-                    {Math.max(1, filtered.findIndex((p) => p.id === active.id) + 1)} /{' '}
-                    {filtered.length}
+                    {Math.max(1, previewPlaces.findIndex((p) => p.id === active.id) + 1)} /{' '}
+                    {previewPlaces.length}
                   </span>
                   <button aria-label="Следующее место" onClick={() => next(1)}>
                     <ArrowRight size={15} />

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { places as demoPlaces } from '../../lib/data';
 
 test('Kolomna has seven playable videos and keeps each region trip separate', async ({
   page,
@@ -23,7 +24,7 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   ).toHaveCount(0);
   if (info.project.name === 'mobile')
     await page.getByRole('button', { name: 'Карта', exact: true }).click();
-  await expect(page.locator('.priority-video')).toHaveCount(7);
+  await expect(page.locator('.priority-video')).toHaveCount(14);
   await expect
     .poll(() => page.locator('.priority-video[data-map-video-visible="true"]').count())
     // Larger readable cards take precedence over forcing five into a dense location.
@@ -99,4 +100,56 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
     'Коломна и окрестности',
   );
   await expect(page.locator('.trip-panel')).not.toContainText('Суйсари');
+});
+
+test('one persistent map contains both regions and the selector only changes its view', async ({
+  page,
+}) => {
+  await page.route('https://tiles.openfreemap.org/**', (r) => r.abort());
+  await page.route('**/api/places', (r) => r.fulfill({ json: { places: [] } }));
+  await page.goto('/');
+  const canvas = page.locator('.maplibregl-canvas');
+  const markers = page.locator('.priority-video');
+  await expect(markers).toHaveCount(14);
+  await canvas.evaluate((el) => {
+    el.dataset.instance = 'original';
+  });
+  await markers.evaluateAll((es) =>
+    es.forEach((el) => {
+      el.dataset.session = 'original';
+    }),
+  );
+  const chooser = page.getByRole('combobox', { name: 'Регион путешествия' });
+  for (const region of ['kolomna', 'karelia', 'kolomna']) {
+    await chooser.selectOption(region);
+    const prefix =
+      region === 'kolomna' ? '[data-place-id^="kolomna-"]' : ':not([data-place-id^="kolomna-"])';
+    await expect
+      .poll(() => page.locator(`.priority-video${prefix}[data-map-video-visible="true"]`).count())
+      .toBeGreaterThanOrEqual(3);
+    await expect(canvas).toHaveAttribute('data-instance', 'original');
+    await expect(page.locator('.priority-video[data-session="original"]')).toHaveCount(14);
+  }
+  // An overview reveals points from both regions without changing the selected region.
+  await page.getByRole('button', { name: 'Показать все места', exact: true }).click();
+  await page.waitForTimeout(1100);
+  for (const prefix of ['[data-place-id^="kolomna-"]', ':not([data-place-id^="kolomna-"])'])
+    await expect
+      .poll(() => page.locator(`.video-marker${prefix}[data-map-marker-visible="true"]`).count())
+      .toBeGreaterThan(0);
+  await expect(chooser).toHaveValue('kolomna');
+  await expect(canvas).toHaveAttribute('data-instance', 'original');
+  const otherRegion = page
+    .locator('.video-marker:not([data-place-id^="kolomna-"])[data-map-marker-visible="true"]')
+    .first();
+  const id = await otherRegion.getAttribute('data-place-id');
+  const place = demoPlaces.find((p) => p.id === id)!;
+  await otherRegion.click();
+  await expect(page.locator('.active-preview h2')).toHaveText(place.name);
+  // Navigating a card from the other region follows that place's region.
+  const neighbours = demoPlaces.filter((p) => p.region === place.region);
+  const nextPlace = neighbours[(neighbours.findIndex((p) => p.id === id) + 1) % neighbours.length];
+  await page.getByRole('button', { name: 'Следующее место', exact: true }).click();
+  await expect(page.locator('.active-preview h2')).toHaveText(nextPlace.name);
+  await expect(chooser).toHaveValue('kolomna');
 });

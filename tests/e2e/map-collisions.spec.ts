@@ -46,10 +46,19 @@ for (const region of ['karelia', 'kolomna']) {
     await page.route('https://tiles.openfreemap.org/**', (route) => route.abort());
     await page.route('**/api/places', (route) => route.fulfill({ json: { places: [] } }));
     await page.goto('/');
-    await expect(page.locator('.priority-video')).toHaveCount(7);
+    await expect(page.locator('.priority-video')).toHaveCount(14);
     await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption(region);
     await expect(page.locator('.map-wrap')).toHaveAttribute('data-region', region);
-    await expect(page.locator('.priority-video')).toHaveCount(7);
+    await expect(page.locator('.priority-video')).toHaveCount(14);
+    await expect
+      .poll(() =>
+        page
+          .locator(
+            `.priority-video${region === 'kolomna' ? '[data-place-id^="kolomna-"]' : ':not([data-place-id^="kolomna-"])'}[data-map-marker-visible="true"]`,
+          )
+          .count(),
+      )
+      .toBeGreaterThanOrEqual(isMobile ? 2 : 3);
     await expectNoCollisions(page);
     if (region === 'karelia') {
       await expect
@@ -84,7 +93,7 @@ for (const region of ['karelia', 'kolomna']) {
       await page.waitForTimeout(400);
       await expectNoCollisions(page);
     }
-    await page.getByRole('button', { name: 'Показать весь регион' }).click();
+    await page.getByRole('button', { name: 'Показать все места' }).click();
     await page.waitForTimeout(1400);
     await expectNoCollisions(page);
   });

@@ -13,7 +13,7 @@ test('map previews play within budget and hand playback to the selected card', a
     await expect(page.getByRole('navigation', { name: 'Действия на телефоне' })).toBeVisible();
   }
   const videoMarkers = page.locator('.priority-video');
-  await expect(videoMarkers).toHaveCount(7);
+  await expect(videoMarkers).toHaveCount(14);
   const expected = await page.locator('.priority-video[data-map-video-visible="true"]').count();
   expect(expected).toBeGreaterThan(0);
   expect(expected).toBeLessThanOrEqual(5);
@@ -88,9 +88,9 @@ test('map previews play within budget and hand playback to the selected card', a
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(previews).toHaveCount(0);
   await page.getByRole('button', { name: 'Уменьшить масштаб', exact: true }).click();
-  await expect(videoMarkers).toHaveCount(7);
+  await expect(videoMarkers).toHaveCount(14);
   await page.getByRole('button', { name: 'Природа', exact: true }).click();
-  await expect(videoMarkers).toHaveCount(4);
+  await expect(videoMarkers).toHaveCount(5);
   await expect(page.getByRole('button', { name: 'Показать Остров Кижи', exact: true })).toHaveCount(
     0,
   );

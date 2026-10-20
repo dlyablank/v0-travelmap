@@ -15,7 +15,7 @@ import {
 import { createMapVideoPreview } from '@/lib/map-video-preview';
 import { selectMapMarkers, mapVideoCamera, mapMarkerSize } from '@/lib/map-video-layout';
 import type { Place, RouteResult } from '@/lib/types';
-import type { ExplorerRegion } from '@/lib/regions';
+import { inRegion, type ExplorerRegion } from '@/lib/regions';
 const localStyle: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -71,7 +71,9 @@ export default function ExplorerMap({
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
-  const framedVideos = useRef(false);
+  const initialRegion = useRef(region);
+  const framedRegion = useRef<string | null>(null);
+  const focusRegion = useRef<(() => void) | null>(null);
   const [ready, setReady] = useState<maplibregl.Map | null>(null);
   const [mapCreated, setMapCreated] = useState<maplibregl.Map | null>(null);
   const [local, setLocal] = useState(true);
@@ -86,15 +88,19 @@ export default function ExplorerMap({
     playbackState.current = { active, autoplay, previewsVisible, pickMode, route };
     syncVideoState.current?.();
   }, [active, autoplay, previewsVisible, pickMode, route]);
-  const callbacks = useRef({ onSelect, onPick, pickMode, places, onReady, onNeedVideos });
+  const callbacks = useRef({ onSelect, onPick, pickMode, places, region, onReady, onNeedVideos });
   useEffect(() => {
-    callbacks.current = { onSelect, onPick, pickMode, places, onReady, onNeedVideos };
-  }, [onSelect, onPick, pickMode, places, onReady, onNeedVideos]);
+    callbacks.current = { onSelect, onPick, pickMode, places, region, onReady, onNeedVideos };
+  }, [onSelect, onPick, pickMode, places, region, onReady, onNeedVideos]);
   useEffect(() => {
     updatePlaces.current?.();
   }, [places]);
   useEffect(() => {
+    focusRegion.current?.();
+  }, [region]);
+  useEffect(() => {
     if (!el.current) return;
+    const region = initialRegion.current;
     let destroyed = false;
     let m: maplibregl.Map;
     const startingStyle: maplibregl.StyleSpecification = {
@@ -103,7 +109,7 @@ export default function ExplorerMap({
         {
           id: 'water',
           type: 'background',
-          paint: { 'background-color': region.id === 'karelia' ? '#c4dce4' : '#e3e9d9' },
+          paint: { 'background-color': '#c4dce4' },
         },
         ...localStyle.layers.slice(1),
       ],
@@ -114,7 +120,7 @@ export default function ExplorerMap({
         style: startingStyle,
         center: region.center,
         zoom: region.zoom,
-        minZoom: 4,
+        minZoom: 2,
         maxZoom: 17,
         attributionControl: { compact: true },
       });
@@ -168,7 +174,7 @@ export default function ExplorerMap({
       map.current?.remove();
       map.current = null;
     };
-  }, [region]);
+  }, []);
   useEffect(() => {
     const current = map.current;
     if (!current || mapCreated !== current) return;
@@ -302,25 +308,32 @@ export default function ExplorerMap({
       const videoFeatures = places.filter((p) => p.video).map(placeFeature);
       const width = m.getContainer().clientWidth,
         height = m.getContainer().clientHeight;
-      if (!framedVideos.current && width > 0 && height > 0) {
-        framedVideos.current = true;
+      const region = callbacks.current.region;
+      if (framedRegion.current !== region.id && width > 0 && height > 0) {
+        const firstFrame = framedRegion.current === null;
+        framedRegion.current = region.id;
         const state = playbackState.current;
-        const videos = places.filter((p) => p.video);
-        if (videos.length && !state.active && !state.route && !state.pickMode) {
-          const bounds = new maplibregl.LngLatBounds();
-          videos.forEach((p) => bounds.extend([p.longitude, p.latitude]));
+        const videos = places.filter((p) => p.video && inRegion(p, region));
+        if (!state.active && !state.route && !state.pickMode) {
           const padding = { top: Math.min(130, height / 4), bottom: 40, left: 12, right: 60 };
-          const initial = m.cameraForBounds(bounds, { padding, maxZoom: region.previewZoom });
-          if (initial?.center && initial.zoom !== undefined) {
-            const center = maplibregl.LngLat.convert(initial.center);
-            const camera = mapVideoCamera(
-              videos,
-              { width, height, ...padding },
-              { longitude: center.lng, latitude: center.lat, zoom: initial.zoom },
-            );
-            selectedVideos.current = [];
-            m.jumpTo({ center: [camera.longitude, camera.latitude], zoom: camera.zoom, padding });
+          let view = { center: region.center, zoom: region.zoom, padding };
+          if (videos.length) {
+            const bounds = new maplibregl.LngLatBounds();
+            videos.forEach((p) => bounds.extend([p.longitude, p.latitude]));
+            const initial = m.cameraForBounds(bounds, { padding, maxZoom: region.previewZoom });
+            if (initial?.center && initial.zoom !== undefined) {
+              const center = maplibregl.LngLat.convert(initial.center);
+              const camera = mapVideoCamera(
+                videos,
+                { width, height, ...padding },
+                { longitude: center.lng, latitude: center.lat, zoom: initial.zoom },
+              );
+              view = { center: [camera.longitude, camera.latitude], zoom: camera.zoom, padding };
+            }
           }
+          selectedVideos.current = [];
+          if (firstFrame) m.jumpTo(view);
+          else m.flyTo({ ...view, duration: 1000 });
         }
       }
       const seen = new Set<string>();
@@ -412,6 +425,7 @@ export default function ExplorerMap({
       markers.current = [...records.values()].map((r) => r.marker);
       syncPreviews();
     }
+    focusRegion.current = refresh;
     let frame = 0;
     function moving() {
       if (!frame)
@@ -447,6 +461,7 @@ export default function ExplorerMap({
       cancelAnimationFrame(frame);
       if (syncVideoState.current === syncPreviews) syncVideoState.current = null;
       if (updatePlaces.current === updateData) updatePlaces.current = null;
+      if (focusRegion.current === refresh) focusRegion.current = null;
       document.removeEventListener('visibilitychange', syncPreviews);
       motion.removeEventListener('change', syncPreviews);
       connection?.removeEventListener('change', syncPreviews);
@@ -461,7 +476,7 @@ export default function ExplorerMap({
       });
       records.clear();
     };
-  }, [mapCreated, region]);
+  }, [mapCreated]);
   useEffect(() => {
     if (active && ready === map.current)
       map.current?.flyTo({
@@ -510,15 +525,13 @@ export default function ExplorerMap({
   useEffect(() => {
     const m = map.current;
     if (!m || ready !== m || !local) return;
-    const labels: [string, number, number][] =
-      region.id === 'karelia'
-        ? [
-            ['ЛАДОЖСКОЕ\nОЗЕРО', 31.25, 61.05],
-            ['ОНЕЖСКОЕ\nОЗЕРО', 35.4, 61.65],
-            ['Сортавала', 30.68, 61.7],
-            ['Петрозаводск', 34.39, 61.79],
-          ]
-        : [['Коломна', 38.752, 55.103]];
+    const labels: [string, number, number][] = [
+      ['ЛАДОЖСКОЕ\nОЗЕРО', 31.25, 61.05],
+      ['ОНЕЖСКОЕ\nОЗЕРО', 35.4, 61.65],
+      ['Сортавала', 30.68, 61.7],
+      ['Петрозаводск', 34.39, 61.79],
+      ['Коломна', 38.752, 55.103],
+    ];
     const list = labels.map(([text, lng, lat]) => {
       const element = document.createElement('div');
       element.className = text.includes('ОЗЕРО') ? 'geography-label lake-name' : 'geography-label';
@@ -528,7 +541,7 @@ export default function ExplorerMap({
     });
     syncVideoState.current?.();
     return () => list.forEach((l) => l.remove());
-  }, [ready, local, region]);
+  }, [ready, local]);
   return (
     <div className={`map-wrap ${pickMode ? 'picking' : ''}`} data-region={region.id}>
       <div ref={el} className="map-canvas" data-testid="map" />
@@ -558,13 +571,19 @@ export default function ExplorerMap({
         </button>
         <i />
         <button
-          aria-label="Показать весь регион"
+          aria-label="Показать все места"
+          title="Показать все места на карте"
           onClick={() => {
             const bounds = new maplibregl.LngLatBounds();
             places.forEach((p) => bounds.extend([p.longitude, p.latitude]));
-            if (places.length)
-              map.current?.fitBounds(bounds, { padding: 80, maxZoom: region.previewZoom });
-            else map.current?.flyTo({ center: region.center, zoom: region.zoom });
+            if (places.length && map.current) {
+              const height = map.current.getContainer().clientHeight;
+              map.current.fitBounds(bounds, {
+                padding: { top: Math.min(130, height / 4) + 45, bottom: 85, left: 42, right: 90 },
+                maxZoom: 12.5,
+                duration: 1000,
+              });
+            } else map.current?.flyTo({ center: region.center, zoom: region.zoom });
           }}
         >
           <LocateFixed size={19} />
