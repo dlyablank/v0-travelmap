@@ -25,6 +25,9 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
     await page.getByRole('button', { name: 'Карта', exact: true }).click();
   await expect(page.locator('.priority-video')).toHaveCount(7);
   await expect
+    .poll(() => page.locator('.priority-video[data-map-video-visible="true"]').count())
+    .toBeGreaterThanOrEqual(info.project.name === 'mobile' ? 4 : 5);
+  await expect
     .poll(() =>
       page
         .locator('.map-wrap video')
@@ -36,10 +39,10 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
             ).length,
         ),
     )
-    .toBe(5);
+    .toBe(await page.locator('.priority-video[data-map-video-visible="true"]').count());
   await expect
     .poll(() =>
-      page.locator('.priority-video').evaluateAll((markers) => {
+      page.locator('.priority-video[data-map-video-visible="true"]').evaluateAll((markers) => {
         const rects = markers.map((m) => m.getBoundingClientRect());
         return rects.every((a, i) =>
           rects

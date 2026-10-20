@@ -119,9 +119,7 @@ test('a map card opens the shared reel and closing restores the current place', 
   await page.route('https://tiles.openfreemap.org/**', (r) => r.abort());
   await page.goto('/');
   await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
-  await page
-    .getByRole('button', { name: 'Показать Стены Коломенского кремля', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Показать Улица Лажечникова', exact: true }).click();
   await page.getByRole('button', { name: 'Смотреть видео', exact: true }).click();
   const reel = page.getByRole('dialog', { name: 'Видео путешествий' });
   await expect(reel.locator('video')).toHaveCount(2);
@@ -129,14 +127,14 @@ test('a map card opens the shared reel and closing restores the current place', 
   await expect(reel.locator('.reel-info-sheet')).not.toBeVisible();
   await expect(reel.getByRole('button', { name: 'Добавить в поездку', exact: true })).toBeVisible();
   await reel.locator('.reel-place-details>summary').click();
-  await expect(reel.locator('.reel-info-sheet')).toContainText('Краснокирпичные стены');
+  await expect(reel.locator('.reel-info-sheet')).toContainText('Пешеходная улица');
   await expect(reel.getByRole('region', { name: 'Автор и происхождение видео' })).toContainText(
     'Андрей Елбаев',
   );
   await reel.getByRole('button', { name: 'Следующее видео', exact: true }).click();
   await expect(reel.locator('.reel-info-sheet')).not.toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.active-preview h2')).toHaveText('Улица Лажечникова');
+  await expect(page.locator('.active-preview h2')).toHaveText('Улица Зайцева');
   await expect(page.getByRole('button', { name: 'Смотреть видео', exact: true })).toBeFocused();
 });
 

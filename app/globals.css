@@ -1255,25 +1255,6 @@ h1 > span:not(.heading-spark) {
 .video-marker.priority-video.is-active {
   z-index: 5;
 }
-.map-marker-connectors {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 2;
-  stroke: #c95943;
-  stroke-width: 1;
-  fill: #e86648;
-}
-.map-wrap[data-region='kolomna'] .priority-video {
-  width: 50px;
-  height: 76px;
-}
-.map-wrap[data-region='kolomna'] .priority-video b {
-  max-width: 90px;
-  font-size: 8px;
-}
 .video-marker.is-active:after {
   border-top-color: var(--coral);
 }
@@ -4059,4 +4040,45 @@ h1 > span:not(.heading-spark) {
   border-radius: 10px;
   background: #eaf0e1;
   color: #405934;
+}
+
+/* Video tiles stay centered on the geographic coordinate; titles remain inside the tile. */
+.video-marker.priority-video {
+  width: 50px;
+  height: 76px;
+  transition: none;
+}
+.video-marker.priority-video::after {
+  display: none;
+}
+.video-marker.priority-video b {
+  top: auto;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  transform: none;
+  max-width: none;
+  width: 100%;
+  border: 0;
+  border-radius: 0 0 4px 4px;
+  padding: 3px 2px;
+  font-size: 8px;
+  line-height: 10px;
+  color: white;
+  background: #153329b8;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  box-shadow: none;
+}
+.video-marker.priority-video > span {
+  top: 3px;
+  bottom: auto;
+  left: 3px;
+}
+
+.video-marker.priority-video b,
+.video-marker.priority-video > span {
+  z-index: 2;
 }

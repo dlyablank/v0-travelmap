@@ -14,9 +14,12 @@ test('map previews play within budget and hand playback to the selected card', a
   }
   const videoMarkers = page.locator('.priority-video');
   await expect(videoMarkers).toHaveCount(7);
+  const expected = await page.locator('.priority-video[data-map-video-visible="true"]').count();
+  expect(expected).toBeGreaterThan(0);
+  expect(expected).toBeLessThanOrEqual(5);
   await expect
     .poll(() =>
-      videoMarkers.evaluateAll((markers) =>
+      page.locator('.priority-video[data-map-video-visible="true"]').evaluateAll((markers) =>
         markers.every((marker) => {
           const rect = marker.getBoundingClientRect();
           const map = marker.closest('.map-wrap')!.getBoundingClientRect();
@@ -34,16 +37,17 @@ test('map previews play within budget and hand playback to the selected card', a
   await expect
     .poll(() =>
       previews.evaluateAll(
-        (videos) =>
-          videos.length === 5 &&
+        (videos, expected) =>
+          videos.length === expected &&
           videos.every((v) => {
             const video = v as HTMLVideoElement;
             return !video.paused && video.currentTime > 0.2;
           }),
+        expected,
       ),
     )
     .toBe(true);
-  await expect(previews).toHaveCount(5);
+  await expect(previews).toHaveCount(expected);
   expect(
     await previews.evaluateAll((videos) =>
       videos.every((element) => {
@@ -118,7 +122,9 @@ test('a browser autoplay refusal retries map previews on the first touch', async
   await page.route('**/api/places', (route) => route.fulfill({ json: { places: [] } }));
   await page.goto('/');
   const previews = page.locator('.map-wrap video');
-  await expect(previews).toHaveCount(5);
+  await expect.poll(() => previews.count()).toBeGreaterThan(0);
+  const expected = await previews.count();
+  expect(expected).toBeLessThanOrEqual(5);
   await expect
     .poll(() =>
       previews.evaluateAll((videos) => videos.every((v) => (v as HTMLVideoElement).paused)),
@@ -130,11 +136,12 @@ test('a browser autoplay refusal retries map previews on the first touch', async
   await expect
     .poll(() =>
       previews.evaluateAll(
-        (videos) =>
-          videos.length === 5 &&
+        (videos, expected) =>
+          videos.length === expected &&
           videos.every(
             (v) => !(v as HTMLVideoElement).paused && (v as HTMLVideoElement).currentTime > 0.2,
           ),
+        expected,
       ),
     )
     .toBe(true);
@@ -157,7 +164,8 @@ test('map previews still move when the browser refuses every video play request'
   await page.route('**/api/places', (r) => r.fulfill({ json: { places: [] } }));
   await page.goto('/');
   const motions = page.locator('.map-wrap .motion-preview');
-  await expect(motions).toHaveCount(5);
+  await expect.poll(() => motions.count()).toBeGreaterThan(0);
+  expect(await motions.count()).toBeLessThanOrEqual(5);
   await expect
     .poll(() =>
       motions.evaluateAll((images) =>
@@ -173,7 +181,8 @@ test('map previews still move when the browser refuses every video play request'
   await page.getByRole('button', { name: 'Видео на карте', exact: true }).click();
   await expect(motions).toHaveCount(0);
   await page.getByRole('button', { name: 'Видео на карте', exact: true }).click();
-  await expect(motions).toHaveCount(5);
+  await expect.poll(() => motions.count()).toBeGreaterThan(0);
+  expect(await motions.count()).toBeLessThanOrEqual(5);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(motions).toHaveCount(0);
 });

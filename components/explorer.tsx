@@ -74,6 +74,48 @@ export default function Explorer() {
       previous.some((p) => p.id === place.id) ? previous : [...previous, place],
     );
   }, []);
+  const mapFetch = useRef<{
+    at: number;
+    controller: AbortController | null;
+    timer?: ReturnType<typeof setTimeout>;
+  }>({
+    at: 0,
+    controller: null,
+  });
+  const loadMapVideos = useCallback(function requestMapVideos() {
+    if (mapFetch.current.controller) return;
+    const wait = 1500 - (Date.now() - mapFetch.current.at);
+    if (wait > 0) {
+      if (!mapFetch.current.timer)
+        mapFetch.current.timer = setTimeout(() => {
+          mapFetch.current.timer = undefined;
+          requestMapVideos();
+        }, wait);
+      return;
+    }
+    const controller = new AbortController();
+    mapFetch.current.at = Date.now();
+    mapFetch.current.controller = controller;
+    fetch('/api/places', { signal: controller.signal, cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) throw new Error('Places unavailable');
+        return response.json();
+      })
+      .then((data) => {
+        if (!Array.isArray(data.places)) return;
+        setServerPlaces((previous) => {
+          const known = new Set(previous.map((p) => p.id));
+          const fresh = (data.places as Place[]).filter((p) => !known.has(p.id));
+          return fresh.length
+            ? Array.from(new Map([...previous, ...fresh].map((p) => [p.id, p])).values())
+            : previous;
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mapFetch.current.controller === controller) mapFetch.current.controller = null;
+      });
+  }, []);
   const [category, setCategory] = useState('Все места');
   const [query, setQuery] = useState('');
   const [savedOnly, setSavedOnly] = useState(false);
@@ -112,13 +154,19 @@ export default function Explorer() {
     toastTimer.current = setTimeout(() => setToast(''), 6000);
   }, []);
   useEffect(() => {
+    const mapRequests = mapFetch.current;
     const unsub = useExplorer.persist.onFinishHydration(() => setHydrated(true));
     useExplorer.persist.rehydrate();
     const controller = new AbortController();
     fetch('/api/places', { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
-        if (data.places?.length) setServerPlaces(data.places);
+        if (data.places?.length)
+          setServerPlaces((previous) =>
+            Array.from(
+              new Map([...previous, ...data.places].map((p: Place) => [p.id, p])).values(),
+            ),
+          );
         if (data.warning) notify(data.warning);
       })
       .catch(() => {})
@@ -126,6 +174,8 @@ export default function Explorer() {
     return () => {
       unsub();
       controller.abort();
+      mapRequests.controller?.abort();
+      clearTimeout(mapRequests.timer);
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [notify]);
@@ -661,6 +711,7 @@ export default function Explorer() {
             key={region.id}
             region={region}
             places={filtered}
+            onNeedVideos={loadMapVideos}
             active={active}
             onSelect={selectPlace}
             route={route}
