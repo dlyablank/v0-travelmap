@@ -22,6 +22,7 @@ import { optimizeStops } from '@/lib/routing';
 import { distanceLabel, timeLabel } from '@/lib/utils';
 import { PlaceImage } from './place-image';
 import { Button } from './ui/button';
+import { TripCover } from './trip-cover';
 export function TripPanel({
   places,
   onClose,
@@ -150,6 +151,7 @@ export function TripPanel({
         </button>
       </div>
       <div className="trip-content">
+        <TripCover stops={stops} days={days} mode={mode} route={route} />
         <div className="segmented">
           <button className={days === 1 ? 'selected' : ''} onClick={() => setDays(1)}>
             Один день

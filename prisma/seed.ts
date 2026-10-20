@@ -19,6 +19,19 @@ async function main() {
       visitMinutes: p.visitMinutes,
     };
     await db.place.upsert({ where: { id: p.id }, update: data, create: data });
+    if (p.video?.playbackUrl) {
+      const video = {
+        placeId: p.id,
+        sourceType: p.video.sourceType,
+        playbackUrl: p.video.playbackUrl,
+        thumbnailUrl: p.thumbnailUrl,
+      };
+      await db.video.upsert({
+        where: { id: `demo-video-${p.id}` },
+        create: { id: `demo-video-${p.id}`, ...video },
+        update: video,
+      });
+    }
   }
   console.log(`Seeded ${places.length} real places`);
 }

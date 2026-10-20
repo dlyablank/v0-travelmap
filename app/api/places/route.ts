@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { places } from '@/lib/data';
+import { demoVideos } from '@/lib/demo-videos';
 import { placeInput, externalSource } from '@/lib/validation';
 export async function GET() {
   if (!process.env.DATABASE_URL) return NextResponse.json({ places, storage: 'local' });
@@ -10,7 +11,19 @@ export async function GET() {
       orderBy: { createdAt: 'asc' },
     });
     return NextResponse.json({
-      places: rows.map(({ videos, ...p }) => ({ ...p, video: videos[0] })),
+      places: rows.map(({ videos, ...p }) => {
+        const video = videos[0];
+        const demo = demoVideos[p.id];
+        return {
+          ...p,
+          video: video && {
+            ...video,
+            ...(demo && video.playbackUrl === demo.playbackUrl
+              ? { credit: demo.credit, previewUrl: demo.previewUrl }
+              : {}),
+          },
+        };
+      }),
       storage: 'postgres',
     });
   } catch {

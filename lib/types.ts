@@ -23,6 +23,17 @@ export type Place = {
     sourceType: 'upload' | 'youtube' | 'tiktok' | 'instagram';
     originalUrl?: string;
     playbackUrl?: string;
+    previewUrl?: string;
+    credit?: {
+      author: string;
+      authorUrl?: string;
+      recordedAt?: string;
+      rightsBasis?: 'open-license' | 'public-domain' | 'author-permission';
+      sourceUrl: string;
+      license: string;
+      licenseUrl: string;
+      changes?: string;
+    };
   };
   visitMinutes: number;
 };

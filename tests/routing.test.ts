@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { haversine, optimizeStops, straightRoute } from '../lib/routing';
-import { places } from '../lib/data';
+import { places, placeById } from '../lib/data';
 import { externalSource, youtubeId, placeInput } from '../lib/validation';
 describe('trip planning', () => {
   it('calculates a real great-circle distance and keeps identical points at zero', () => {
@@ -11,7 +11,7 @@ describe('trip planning', () => {
     expect(haversine(places[0], places[0])).toBe(0);
   });
   it('keeps the origin, visits all stops once, and takes the closest next stop', () => {
-    const points = [places[0], places[3], places[2]];
+    const points = [placeById.ruskeala, placeById.kivach, placeById.ahvenkoski];
     const ordered = optimizeStops(points);
     expect(ordered.map((p) => p.id)).toEqual(['ruskeala', 'ahvenkoski', 'kivach']);
     expect(points[1].id).toBe('kivach');
@@ -32,9 +32,9 @@ describe('trip planning', () => {
     expect(youtubeId('https://youtube.com/shorts/abcdefghijk')).toBe('abcdefghijk');
     expect(youtubeId('https://youtube.com/shorts/bad')).toBeNull();
   });
-  it('contains 24 unique named geographic points with plausible regional coordinates', () => {
-    expect(places).toHaveLength(24);
-    expect(new Set(places.map((p) => p.id)).size).toBe(24);
+  it('contains 29 unique named geographic points with plausible regional coordinates', () => {
+    expect(places).toHaveLength(29);
+    expect(new Set(places.map((p) => p.id)).size).toBe(29);
     expect(
       places.every(
         (p) => p.latitude > 60 && p.latitude < 67 && p.longitude > 29 && p.longitude < 36,

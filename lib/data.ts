@@ -1,6 +1,57 @@
 import type { Place, Category } from './types';
+import { demoVideos } from './demo-videos';
 // Coordinates mark the named landmark (not hotel entrances or invented businesses).
 const points: [string, string, number, number, string, Category, string, number][] = [
+  [
+    'suisaari',
+    'Суйсари на острове',
+    61.9845,
+    34.5596,
+    'Онежское озеро',
+    'Красивые виды',
+    'Островная деревня на Онеге с высоты. Точка соответствует месту съёмки; добраться можно по воде.',
+    60,
+  ],
+  [
+    'syskyanjoki',
+    'Река Сюскюянйоки',
+    61.6639,
+    31.2731,
+    'Питкярантский район',
+    'Природа',
+    'Изгибы реки среди карельского леса, снятые с воздуха. Точка обозначает место съёмки, а не оборудованный спуск к воде.',
+    45,
+  ],
+  [
+    'iijoki',
+    'Река Иййоки',
+    61.4662,
+    30.0537,
+    'Лахденпохский район',
+    'Природа',
+    'Река у порога Контиовааранкоски с высоты. Точка обозначает район съёмки, доступ к берегу нужно уточнять отдельно.',
+    45,
+  ],
+  [
+    'ruskeala-train',
+    'Паровоз в Рускеале',
+    61.951578,
+    30.572754,
+    'Рускеала',
+    'Приключения',
+    'Паровоз Л-2180 заезжает на поворотный круг у платформы «Горный парк Рускеала». Видео снято в июле 2023 года; расписание показов нужно уточнять.',
+    45,
+  ],
+  [
+    'koirinoja',
+    'Нижний водопад Койриноя',
+    61.638276,
+    31.410226,
+    'Койриноя',
+    'Природа',
+    'Поток среди скал недалеко от Ладоги. На видео — съёмка водопада сверху в ноябре 2022 года.',
+    45,
+  ],
   [
     'ruskeala',
     'Мраморный каньон',
@@ -253,9 +304,14 @@ export const places: Place[] = points.map(
     category,
     description,
     visitMinutes,
-    thumbnailUrl: '/media/karelia.jpg',
-    imageCredit: 'Карелия · фото региона, учебный набор Russian Travel',
-    imagePage: `https://commons.wikimedia.org/w/index.php?search=${encodeURIComponent(name)}&title=Special:MediaSearch&type=image`,
+    thumbnailUrl: demoVideos[id] ? `/media/videos/${id}.jpg` : '/media/karelia.jpg',
+    video: demoVideos[id],
+    imageCredit: demoVideos[id]?.credit
+      ? `Кадр видео · ${demoVideos[id].credit.author}`
+      : 'Карелия · фото региона, учебный набор Russian Travel',
+    imagePage:
+      demoVideos[id]?.credit?.sourceUrl ||
+      `https://commons.wikimedia.org/w/index.php?search=${encodeURIComponent(name)}&title=Special:MediaSearch&type=image`,
   }),
 );
 export const placeById = Object.fromEntries(places.map((p) => [p.id, p]));

@@ -34,6 +34,10 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from './ui/dialog';
 import { PlaceImage } from './place-image';
 import { VideoPlayer } from './video-player';
+import { VideoReel } from './video-reel';
+import { VideoAttribution } from './video-attribution';
+import { TripStopsStrip } from './trip-stops-strip';
+import { useCardVideoPreviews } from './card-video-previews';
 import { TripPanel } from './trip-panel';
 import { ImportDialog, type DraftLocation } from './import-dialog';
 const ExplorerMap = dynamic(() => import('./explorer-map'), {
@@ -55,6 +59,9 @@ const categoryIcon: Record<string, typeof Leaf> = {
 export default function Explorer() {
   const [serverPlaces, setServerPlaces] = useState<Place[]>(demoPlaces);
   const [active, setActive] = useState<Place | null>(null);
+  const [reelId, setReelId] = useState<string | null>(null);
+  const [reelPlaces, setReelPlaces] = useState<Place[]>([]);
+  const gridRef = useRef<HTMLDivElement>(null);
   const [category, setCategory] = useState('Все места');
   const [query, setQuery] = useState('');
   const [savedOnly, setSavedOnly] = useState(false);
@@ -124,6 +131,11 @@ export default function Explorer() {
     setActive(p);
     cardRefs.current[p.id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, []);
+  useCardVideoPreviews(
+    gridRef,
+    !active && !reelId && !tripOpen && !importOpen && !about && !pickMode,
+    filtered,
+  );
   function addToTrip(id: string) {
     if (!trip.includes(id) && trip.length >= 20) {
       notify('В одну поездку можно добавить до 20 мест.');
@@ -139,7 +151,13 @@ export default function Explorer() {
   }
   useEffect(() => {
     function key(e: KeyboardEvent) {
-      if ((e.target as HTMLElement).closest('input,textarea,select') || importOpen || about) return;
+      if (
+        (e.target as HTMLElement).closest('input,textarea,select') ||
+        importOpen ||
+        about ||
+        reelId
+      )
+        return;
       if (e.key === 'Escape') setActive(null);
       if (e.key === 'ArrowRight' && active) {
         const i = filtered.findIndex((p) => p.id === active.id);
@@ -152,8 +170,11 @@ export default function Explorer() {
     }
     document.addEventListener('keydown', key);
     return () => document.removeEventListener('keydown', key);
-  }, [active, filtered, importOpen, about]);
+  }, [active, filtered, importOpen, about, reelId]);
   const currentTrip = hydrated ? trip.length : 0;
+  const selectedStops = hydrated
+    ? trip.map((id) => allPlaces.find((p) => p.id === id)).filter((p): p is Place => !!p)
+    : [];
   return (
     <div className={`explorer ${feedMode ? 'feed-expanded' : ''}`}>
       <header className="app-header">
@@ -306,40 +327,23 @@ export default function Explorer() {
       </div>
       <main className={`workspace mobile-${mobileView}`}>
         <section className="discovery-panel" aria-label="Лента мест">
-          <div className="discovery-heading">
+          <div className="discovery-heading compact-discovery">
             <div className="eyebrow">
-              <span /> МАЛЕНЬКИЕ ПОЕЗДКИ. БОЛЬШИЕ ВПЕЧАТЛЕНИЯ.
+              <span /> СМОТРЕТЬ. ВЫБИРАТЬ. ЕХАТЬ.
             </div>
-            <h1>
-              {savedOnly ? (
-                <>
-                  Ваша коллекция
-                  <br />
-                  <span>впечатлений.</span>
-                </>
-              ) : (
-                <>
-                  А что, если
-                  <br />
-                  <span>в Карелию?</span>
-                  <span className="heading-spark">✳</span>
-                </>
-              )}
-            </h1>
+            <h1>{savedOnly ? 'Ваши открытия' : 'Выходные в Карелии'}</h1>
             <p>
               {savedOnly
-                ? 'Места, к которым хочется вернуться.'
-                : 'Скалы, тихие озёра и дорога, которая того стоит.'}
-              <br />
-              {savedOnly
-                ? 'Добавьте любимые в свою поездку.'
-                : 'Найдите своё место. Остальное — соберём.'}
+                ? 'Любимые места для следующей поездки.'
+                : 'Посмотрите видео. Выберите свои остановки.'}
             </p>
             <div className="region-caption">
               <MapPin size={13} />
               <b>Карелия</b>
               <span>·</span>
-              <span>{allPlaces.length} места для открытия</span>
+              <span>
+                {allPlaces.length} мест · {allPlaces.filter((p) => p.video).length} видео
+              </span>
             </div>
           </div>
           <div className="feed-toolbar">
@@ -363,7 +367,7 @@ export default function Explorer() {
               Обновляем места…
             </div>
           )}
-          <div className="place-grid">
+          <div className="place-grid" ref={gridRef}>
             {filtered.map((p, i) => (
               <div
                 key={p.id}
@@ -376,7 +380,14 @@ export default function Explorer() {
                   <button
                     className="poster-open"
                     aria-label={`Открыть ${p.name}`}
-                    onClick={() => selectPlace(p)}
+                    data-preview-url={p.video?.previewUrl || p.video?.playbackUrl}
+                    onClick={() => {
+                      if (p.video) {
+                        setActive(null);
+                        setReelPlaces(filtered.filter((place) => place.video));
+                        setReelId(p.id);
+                      } else selectPlace(p);
+                    }}
                   >
                     <PlaceImage place={p} loading={i < 4 ? 'eager' : 'lazy'} />
                     <div className="poster-shade" />
@@ -469,6 +480,7 @@ export default function Explorer() {
             onSelect={selectPlace}
             route={route}
             pickMode={pickMode}
+            previewsVisible={!tripOpen && !importOpen && !about && !reelId}
             onPick={(latitude, longitude) => {
               setLocation({ latitude, longitude });
               setPickMode(false);
@@ -528,6 +540,7 @@ export default function Explorer() {
                 </div>
                 <h2>{active.name}</h2>
                 <p>{active.description}</p>
+                <VideoAttribution place={active} />
                 <div className="preview-links">
                   <a
                     href={`https://www.openstreetmap.org/?mlat=${active.latitude}&mlon=${active.longitude}#map=14/${active.latitude}/${active.longitude}`}
@@ -601,6 +614,40 @@ export default function Explorer() {
           />
         )}
       </main>
+      {!tripOpen && !reelId && !pickMode && !importOpen && (
+        <TripStopsStrip
+          stops={selectedStops}
+          onRemove={addToTrip}
+          onOpen={() => setTripOpen(true)}
+          onSelect={(place) => {
+            setCategory('Все места');
+            setQuery('');
+            setSavedOnly(false);
+            setTimeFilter('any');
+            setMobileView('map');
+            setFeedMode(false);
+            selectPlace(place);
+          }}
+        />
+      )}
+      {reelId && reelPlaces.length > 0 && (
+        <VideoReel
+          key={reelId}
+          initialId={reelId}
+          places={reelPlaces}
+          saved={saved}
+          trip={trip}
+          onClose={() => setReelId(null)}
+          onSave={toggleSaved}
+          onTrip={addToTrip}
+          onMap={(place) => {
+            setReelId(null);
+            setMobileView('map');
+            setFeedMode(false);
+            selectPlace(place);
+          }}
+        />
+      )}
       <footer className="status-bar">
         <span>
           <span className="live-dot" />
@@ -674,8 +721,9 @@ export default function Explorer() {
             </p>
           </div>
           <p className="small-note">
-            24 реальные точки Карелии. Фотографии региона служат вдохновением, а не точным видом
-            каждой локации. Разрешённых демо-видео пока нет: добавьте своё или ссылку. Для островов
+            29 реальных точек Карелии. В семи местах доступны короткие видео с открытой лицензией:
+            Кижи, Койриноя, Кивач, Суйсари, Сюскюянйоки, Иййоки и паровоз в Рускеале. Остальные
+            фотографии региона служат вдохновением, а не точным видом каждой локации. Для островов
             нужен водный транспорт. Сохранённое хранится в браузере; серверное хранение доступно при
             подключённой базе.
           </p>

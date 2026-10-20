@@ -4,19 +4,41 @@ import { Play, Pause, Volume2, VolumeX, ExternalLink } from 'lucide-react';
 import type { Place } from '@/lib/types';
 import { youtubeId } from '@/lib/validation';
 import { PlaceImage } from './place-image';
-export function VideoPlayer({ place, active = true }: { place: Place; active?: boolean }) {
+export function VideoPlayer({
+  place,
+  active = true,
+  muted: controlledMuted,
+  onMutedChange,
+}: {
+  place: Place;
+  active?: boolean;
+  muted?: boolean;
+  onMutedChange?: (muted: boolean) => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
-  const [muted, setMuted] = useState(true);
+  const [localMuted, setMuted] = useState(true);
+  const muted = controlledMuted ?? localMuted;
   const [playing, setPlaying] = useState(true);
   const [error, setError] = useState(false);
   const [embed, setEmbed] = useState(false);
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
-    if (active) {
+    if (active && !document.hidden) {
       v.play().catch(() => setPlaying(false));
     } else v.pause();
-    return () => v.pause();
+    let resume = false;
+    function visibility() {
+      if (document.hidden) {
+        resume = !v!.paused;
+        v!.pause();
+      } else if (active && resume) v!.play().catch(() => setPlaying(false));
+    }
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      document.removeEventListener('visibilitychange', visibility);
+      v.pause();
+    };
   }, [active, place.id]);
   const video = place.video;
   const id = video?.sourceType === 'youtube' ? youtubeId(video.originalUrl || '') : null;
@@ -67,7 +89,10 @@ export function VideoPlayer({ place, active = true }: { place: Place; active?: b
           </button>
           <button
             aria-label={muted ? 'Включить звук' : 'Выключить звук'}
-            onClick={() => setMuted(!muted)}
+            onClick={() => {
+              setMuted(!muted);
+              onMutedChange?.(!muted);
+            }}
           >
             {muted ? <VolumeX size={17} /> : <Volume2 size={17} />}
           </button>
