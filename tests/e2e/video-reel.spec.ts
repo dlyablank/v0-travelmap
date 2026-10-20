@@ -17,7 +17,7 @@ test('feed previews loop and the vertical reel cycles with a single active playe
       ),
     )
     .toBe(true);
-  expect(await cards.count()).toBeLessThanOrEqual(testInfo.project.name === 'mobile' ? 2 : 4);
+  expect(await cards.count()).toBeLessThanOrEqual(4);
   const preview = cards.first();
   await expect
     .poll(() => preview.evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 10000 })

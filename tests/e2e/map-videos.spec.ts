@@ -1,8 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('map previews play within budget and hand playback to the selected card', async ({
-  page,
-}, testInfo) => {
+test('map previews play within budget and hand playback to the selected card', async ({ page }) => {
   // Keep the test independent of external tile availability and PostgreSQL/S3.
   await page.route('https://tiles.openfreemap.org/**', (route) => route.abort());
   await page.route('**/api/places', (route) => route.fulfill({ json: { places: [] } }));
@@ -28,15 +26,17 @@ test('map previews play within budget and hand playback to the selected card', a
   const previews = page.locator('.map-wrap video');
   await expect
     .poll(() =>
-      previews.evaluateAll((videos) =>
-        videos.some((v) => {
-          const video = v as HTMLVideoElement;
-          return !video.paused && video.currentTime > 0.2;
-        }),
+      previews.evaluateAll(
+        (videos) =>
+          videos.length === 5 &&
+          videos.every((v) => {
+            const video = v as HTMLVideoElement;
+            return !video.paused && video.currentTime > 0.2;
+          }),
       ),
     )
     .toBe(true);
-  expect(await previews.count()).toBeLessThanOrEqual(testInfo.project.name === 'mobile' ? 1 : 3);
+  await expect(previews).toHaveCount(5);
 
   const toggle = page.getByRole('button', { name: 'Видео на карте', exact: true });
   await toggle.click();

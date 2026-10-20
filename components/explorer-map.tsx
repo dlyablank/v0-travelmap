@@ -141,7 +141,6 @@ export default function ExplorerMap({
       { marker: maplibregl.Marker; preview?: ReturnType<typeof createMapVideoPreview> }
     >();
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
-    const mobile = matchMedia('(max-width: 767px)');
     const connection = (
       navigator as Navigator & { connection?: EventTarget & { saveData?: boolean } }
     ).connection;
@@ -167,7 +166,7 @@ export default function ExplorerMap({
           const center = m.getCenter();
           return a.marker.getLngLat().distanceTo(center) - b.marker.getLngLat().distanceTo(center);
         });
-      const playing = new Set(allowed ? candidates.slice(0, mobile.matches ? 1 : 3) : []);
+      const playing = new Set(allowed ? candidates.slice(0, 5) : []);
       // Stop old decoders before starting new ones.
       for (const record of records.values()) if (!playing.has(record)) record.preview?.stop();
       for (const record of playing) record.preview?.start();
@@ -288,7 +287,6 @@ export default function ExplorerMap({
     m.on('resize', syncPreviews);
     document.addEventListener('visibilitychange', syncPreviews);
     motion.addEventListener('change', syncPreviews);
-    mobile.addEventListener('change', syncPreviews);
     connection?.addEventListener('change', syncPreviews);
     const observer = new ResizeObserver(syncPreviews);
     observer.observe(m.getContainer());
@@ -297,7 +295,6 @@ export default function ExplorerMap({
       observer.disconnect();
       document.removeEventListener('visibilitychange', syncPreviews);
       motion.removeEventListener('change', syncPreviews);
-      mobile.removeEventListener('change', syncPreviews);
       connection?.removeEventListener('change', syncPreviews);
       m.off('movestart', syncPreviews);
       m.off('resize', syncPreviews);
