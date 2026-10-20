@@ -1,0 +1,23 @@
+CREATE TABLE "Place" (
+ "id" TEXT PRIMARY KEY, "name" TEXT NOT NULL, "description" TEXT NOT NULL,
+ "latitude" DOUBLE PRECISION NOT NULL, "longitude" DOUBLE PRECISION NOT NULL,
+ "city" TEXT NOT NULL, "region" TEXT NOT NULL, "category" TEXT NOT NULL,
+ "thumbnailUrl" TEXT NOT NULL, "visitMinutes" INTEGER NOT NULL DEFAULT 60,
+ "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE "Video" (
+ "id" TEXT PRIMARY KEY, "placeId" TEXT NOT NULL REFERENCES "Place"("id") ON DELETE CASCADE,
+ "sourceType" TEXT NOT NULL, "originalUrl" TEXT, "playbackUrl" TEXT,
+ "thumbnailUrl" TEXT NOT NULL, "duration" DOUBLE PRECISION,
+ "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE "Trip" (
+ "id" TEXT PRIMARY KEY, "title" TEXT NOT NULL,
+ "durationDays" INTEGER NOT NULL DEFAULT 1, "transportMode" TEXT NOT NULL DEFAULT 'car',
+ "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE "TripStop" (
+ "id" TEXT PRIMARY KEY, "tripId" TEXT NOT NULL REFERENCES "Trip"("id") ON DELETE CASCADE,
+ "placeId" TEXT NOT NULL REFERENCES "Place"("id"), "orderIndex" INTEGER NOT NULL,
+ UNIQUE("tripId","orderIndex")
+);

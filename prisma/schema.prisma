@@ -1,0 +1,50 @@
+generator client {
+ provider = "prisma-client-js"
+ engineType = "client"
+}
+datasource db {
+ provider = "postgresql"
+}
+model Place {
+ id String @id @default(cuid())
+ name String
+ description String
+ latitude Float
+ longitude Float
+ city String
+ region String
+ category String
+ thumbnailUrl String
+ visitMinutes Int @default(60)
+ createdAt DateTime @default(now())
+ videos Video[]
+ tripStops TripStop[]
+}
+model Video {
+ id String @id @default(cuid())
+ placeId String
+ place Place @relation(fields:[placeId], references:[id], onDelete:Cascade)
+ sourceType String
+ originalUrl String?
+ playbackUrl String?
+ thumbnailUrl String
+ duration Float?
+ createdAt DateTime @default(now())
+}
+model Trip {
+ id String @id @default(cuid())
+ title String
+ durationDays Int @default(1)
+ transportMode String @default("car")
+ createdAt DateTime @default(now())
+ stops TripStop[]
+}
+model TripStop {
+ id String @id @default(cuid())
+ tripId String
+ trip Trip @relation(fields:[tripId], references:[id], onDelete:Cascade)
+ placeId String
+ place Place @relation(fields:[placeId], references:[id])
+ orderIndex Int
+ @@unique([tripId,orderIndex])
+}

@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: weekend-postgres
+    environment:
+      POSTGRES_USER: weekend
+      POSTGRES_PASSWORD: weekend_local_dev
+      POSTGRES_DB: weekend
+    ports: ['127.0.0.1:5432:5432']
+    volumes: [weekend-db:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U weekend -d weekend']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  weekend-db:
