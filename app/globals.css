@@ -2825,6 +2825,8 @@ h1 > span:not(.heading-spark) {
 
 .map-wrap > .map-canvas {
   position: absolute;
+  /* Contain marker stacking so map labels and controls always stay above it. */
+  z-index: 0;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -2852,10 +2854,11 @@ h1 > span:not(.heading-spark) {
   z-index: 3;
 }
 .map-controls,
-.map-layers {
+.map-layers,
+.map-region,
+.map-video-toggle {
   z-index: 10;
 }
-.map-region,
 .overview-label,
 .map-legend,
 .pick-hint {
