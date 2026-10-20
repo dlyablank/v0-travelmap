@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { places as demoPlaces } from '@/lib/data';
 import { regions, getRegion, inRegion } from '@/lib/regions';
+import { locationId as placeLocationId, locationGroups } from '@/lib/locations';
 import { categories, type Place, type RouteResult } from '@/lib/types';
 import { haversine } from '@/lib/routing';
 import { useExplorer } from '@/lib/store';
@@ -89,7 +90,18 @@ export default function Explorer() {
   const [about, setAbout] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const { trip, saved, customPlaces, toggleSaved, toggleTrip, regionId, setRegion } = useExplorer();
+  const {
+    trip,
+    saved,
+    customPlaces,
+    toggleSaved,
+    toggleTrip,
+    regionId,
+    setRegion,
+    locationId,
+    setLocation: setTripLocation,
+    syncLocations,
+  } = useExplorer();
   const region = getRegion(hydrated ? regionId : 'karelia');
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const touch = useRef(0);
@@ -126,6 +138,29 @@ export default function Explorer() {
       ),
     [serverPlaces, customPlaces, hydrated],
   );
+  useEffect(() => {
+    if (hydrated) syncLocations(allPlaces);
+  }, [allPlaces, hydrated, loading, regionId, syncLocations]);
+  const savedGroups = locationGroups(allPlaces.filter((p) => hydrated && saved.includes(p.id)));
+  function chooseLocation(id: string) {
+    const group = locationGroups(allPlaces).find((g) => g.id === id);
+    const destination = regions.find((r) => r.name === group?.region);
+    if (destination) setRegion(destination.id);
+    setTripLocation(id);
+    setRoute(null);
+    setActive(null);
+    setCategory('Все места');
+    setQuery('');
+    setTimeFilter('any');
+  }
+  function openSaved() {
+    setSavedOnly(true);
+    setMobileView('feed');
+    setFeedMode(false);
+    chooseLocation(
+      savedGroups.find((g) => g.id === locationId)?.id || savedGroups[0]?.id || locationId,
+    );
+  }
   const regionPlaces = useMemo(
     () => allPlaces.filter((p) => inRegion(p, region)),
     [allPlaces, region],
@@ -135,7 +170,7 @@ export default function Explorer() {
       regionPlaces.filter(
         (p) =>
           (category === 'Все места' || p.category === category) &&
-          (!savedOnly || saved.includes(p.id)) &&
+          (!savedOnly || (saved.includes(p.id) && placeLocationId(p) === locationId)) &&
           `${p.name} ${p.city} ${p.region}`.toLowerCase().includes(query.toLowerCase()) &&
           (timeFilter === 'any' ||
             haversine(
@@ -148,7 +183,7 @@ export default function Explorer() {
               55 <=
               Number(timeFilter)),
       ),
-    [regionPlaces, region, category, savedOnly, saved, query, timeFilter],
+    [regionPlaces, region, category, savedOnly, saved, query, timeFilter, locationId],
   );
   const selectPlace = useCallback((p: Place) => {
     setActive(p);
@@ -194,6 +229,7 @@ export default function Explorer() {
     if (fromMap && place) {
       const destination = regions.find((r) => r.name === place.region);
       if (destination && destination.id !== region.id) setRegion(destination.id);
+      setTripLocation(placeLocationId(place));
       setMobileView('map');
       setFeedMode(false);
       selectPlace(place);
@@ -203,6 +239,14 @@ export default function Explorer() {
     }
   }
   function addToTrip(id: string) {
+    const place =
+      allPlaces.find((p) => p.id === id) ||
+      (reelReturn.current.place?.id === id ? reelReturn.current.place : null);
+    if (place) {
+      const destination = regions.find((r) => r.name === place.region);
+      if (destination) setRegion(destination.id);
+      setTripLocation(placeLocationId(place));
+    }
     const currentTrip = useExplorer.getState().trip;
     if (!currentTrip.includes(id) && currentTrip.length >= 20) {
       notify('В одну поездку можно добавить до 20 мест.');
@@ -270,7 +314,7 @@ export default function Explorer() {
           <button className={!savedOnly ? 'active' : ''} onClick={() => setSavedOnly(false)}>
             Исследовать
           </button>
-          <button className={savedOnly ? 'active' : ''} onClick={() => setSavedOnly(true)}>
+          <button className={savedOnly ? 'active' : ''} onClick={openSaved}>
             Сохранённое
             {hydrated && saved.length > 0 && <span className="nav-count">{saved.length}</span>}
           </button>
@@ -388,6 +432,7 @@ export default function Explorer() {
             onClick={() => setMobileView(mobileView === 'map' ? 'feed' : 'map')}
           >
             {mobileView === 'map' ? <Grid2X2 size={20} /> : <MapIcon size={20} />}
+            <small>{mobileView === 'map' ? 'Лента' : 'Карта'}</small>
           </button>
           <button
             aria-label={`Моя поездка, мест: ${currentTrip}`}
@@ -397,6 +442,7 @@ export default function Explorer() {
           >
             <Route size={20} />
             {currentTrip > 0 && <span>{currentTrip}</span>}
+            <small>Поездка</small>
           </button>
           <button
             aria-label="Добавить видео"
@@ -404,6 +450,7 @@ export default function Explorer() {
             onClick={() => setImportOpen(true)}
           >
             <Plus size={22} />
+            <small>Видео</small>
           </button>
         </nav>
         {filtersOpen && (
@@ -460,6 +507,28 @@ export default function Explorer() {
               </span>
             </div>
           </div>
+          {savedOnly && (
+            <nav className="saved-locations" aria-label="Сохранённое по локациям">
+              {savedGroups.map((group) => (
+                <button
+                  key={group.id}
+                  aria-pressed={group.id === locationId}
+                  onClick={() => chooseLocation(group.id)}
+                >
+                  <MapPin size={15} />
+                  <span>
+                    <b>{group.name}</b>
+                    <small>
+                      {group.region} · {group.places.length} мест
+                    </small>
+                  </span>
+                </button>
+              ))}
+              {!savedGroups.length && (
+                <p>Сохраняйте места из любых регионов — здесь они соберутся по локациям.</p>
+              )}
+            </nav>
+          )}
           <div className="feed-toolbar">
             <h2>
               {savedOnly ? 'Сохранённые места' : 'Вдохновение рядом'} <span>{filtered.length}</span>
@@ -736,7 +805,6 @@ export default function Explorer() {
               selectPlace(p);
               setTripOpen(false);
             }}
-            onMessage={notify}
           />
         )}
       </main>
@@ -776,6 +844,7 @@ export default function Explorer() {
           onMap={(place) => {
             const destination = regions.find((r) => r.name === place.region);
             if (destination && destination.id !== region.id) setRegion(destination.id);
+            setTripLocation(placeLocationId(place));
             setReelId(null);
             setMobileView('map');
             setFeedMode(false);

@@ -29,25 +29,16 @@ test('explore, filter, save, build route and retain trip after reload', async ({
   await expect(page.locator('[data-testid=map] canvas')).toBeVisible();
   await expect(page.locator('.video-marker,.map-cluster').first()).toBeVisible();
   if (isMobile)
-    await page
-      .locator('.mobile-bottom')
-      .getByRole('button', { name: 'Лента', exact: true })
-      .click();
+    await page.locator('.mobile-tools').getByRole('button', { name: 'Лента', exact: true }).click();
   await page.getByRole('button', { name: 'Открыть Мраморный каньон', exact: true }).click();
   if (isMobile)
-    await page
-      .locator('.mobile-bottom')
-      .getByRole('button', { name: 'Карта', exact: true })
-      .click();
+    await page.locator('.mobile-tools').getByRole('button', { name: 'Карта', exact: true }).click();
   await expect(page.locator('.active-preview h2')).toHaveText('Мраморный каньон');
   await page.getByRole('button', { name: 'Следующее место' }).click();
   await expect(page.locator('.active-preview h2')).toHaveText('Ладожские шхеры');
   await page.getByRole('button', { name: 'Закрыть место' }).click();
   if (isMobile)
-    await page
-      .locator('.mobile-bottom')
-      .getByRole('button', { name: 'Лента', exact: true })
-      .click();
+    await page.locator('.mobile-tools').getByRole('button', { name: 'Лента', exact: true }).click();
   await page.getByRole('button', { name: 'Сохранить Мраморный каньон', exact: true }).click();
   await page
     .getByRole('button', { name: 'Добавить в поездку Мраморный каньон', exact: true })
@@ -57,10 +48,7 @@ test('explore, filter, save, build route and retain trip after reload', async ({
     .click();
   await page.reload();
   if (isMobile)
-    await page
-      .locator('.mobile-bottom')
-      .getByRole('button', { name: 'Лента', exact: true })
-      .click();
+    await page.locator('.mobile-tools').getByRole('button', { name: 'Лента', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Убрать из поездки Мраморный каньон', exact: true }),
   ).toBeVisible();
@@ -95,7 +83,7 @@ test('upload an owned MP4, persist a new geolocated point, and play only the act
   await page.goto('/');
   if (isMobile)
     await page
-      .locator('.mobile-bottom')
+      .locator('.mobile-tools')
       .getByRole('button', { name: 'Добавить видео', exact: true })
       .click();
   else await page.getByRole('button', { name: 'Добавить видео', exact: true }).click();

@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const coords = stops.map((p) => `${p.longitude},${p.latitude}`).join(';');
     const res = await fetch(
       `${base.replace(/\/$/, '')}/${coords}?overview=full&geometries=geojson&steps=false`,
-      { signal: AbortSignal.timeout(12000), cache: 'no-store' },
+      { signal: AbortSignal.any([request.signal, AbortSignal.timeout(12000)]), cache: 'no-store' },
     );
     if (!res.ok) throw new Error('upstream');
     const data = await res.json();

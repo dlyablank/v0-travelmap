@@ -29,13 +29,13 @@ export function TripCover({
               : 'ПРЕДВАРИТЕЛЬНЫЙ ПЛАН'}
         </span>
         <h3>
-          {region}
+          {cover.city}
           <br />
           <em>в вашем ритме.</em>
         </h3>
         <p>
           <MapPin size={12} /> Остановок: {stops.length} · {days === 1 ? 'Один день' : 'Два дня'} ·{' '}
-          {mode === 'car' ? 'Авто' : 'Пешком'}
+          {mode === 'car' ? 'Авто' : 'Пешком'} · {region}
         </p>
         {route && (
           <div className="trip-cover-stats">

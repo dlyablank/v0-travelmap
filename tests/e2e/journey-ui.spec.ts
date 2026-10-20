@@ -65,6 +65,10 @@ test('discovery, author, mini-map, selected stops and trip cover stay connected'
   await page
     .getByRole('button', { name: 'Добавить в поездку Суйсари на острове', exact: true })
     .click();
+  await expect(strip.getByRole('listitem')).toHaveCount(1);
+  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
+  for (const name of ['Стены Коломенского кремля', 'Улица Лажечникова'])
+    await page.getByRole('button', { name: `Добавить в поездку ${name}`, exact: true }).click();
   await expect(strip.getByRole('listitem')).toHaveCount(2);
   await page.reload();
   if (testInfo.project.name === 'mobile')
@@ -80,7 +84,7 @@ test('discovery, author, mini-map, selected stops and trip cover stay connected'
   await expect(cover).toContainText('30 мин в пути');
   await page.getByRole('button', { name: 'Закрыть поездку', exact: true }).click();
   await strip
-    .getByRole('button', { name: 'Убрать остановку: Суйсари на острове', exact: true })
+    .getByRole('button', { name: 'Убрать остановку: Стены Коломенского кремля', exact: true })
     .click();
   await expect(strip.getByRole('listitem')).toHaveCount(1);
   await strip.getByRole('button', { name: 'Собрать поездку', exact: true }).click();

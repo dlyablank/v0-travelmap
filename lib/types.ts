@@ -38,6 +38,9 @@ export type Place = {
   visitMinutes: number;
 };
 export type RouteResult = {
+  stopIds?: string[];
+  mode?: 'car' | 'walk';
+  locationId?: string;
   coordinates: [number, number][];
   distance: number;
   duration: number | null;
