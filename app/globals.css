@@ -4042,16 +4042,20 @@ h1 > span:not(.heading-spark) {
   color: #405934;
 }
 
-/* Video tiles stay centered on the geographic coordinate; titles remain inside the tile. */
-.video-marker.priority-video {
-  width: 50px;
-  height: 76px;
+/* All marker contents stay inside their shared collision footprint. */
+.video-marker,
+.video-marker.is-active,
+.video-marker.priority-video,
+.map-cluster {
+  width: var(--map-marker-width);
+  height: var(--map-marker-height);
+  box-shadow: 0 2px 4px #15332926;
   transition: none;
 }
-.video-marker.priority-video::after {
+.video-marker::after {
   display: none;
 }
-.video-marker.priority-video b {
+.video-marker b {
   top: auto;
   bottom: 0;
   left: 0;
@@ -4072,13 +4076,24 @@ h1 > span:not(.heading-spark) {
   -webkit-box-orient: vertical;
   box-shadow: none;
 }
-.video-marker.priority-video > span {
+.video-marker > span {
   top: 3px;
   bottom: auto;
   left: 3px;
 }
 
-.video-marker.priority-video b,
-.video-marker.priority-video > span {
+.video-marker b,
+.video-marker > span {
   z-index: 2;
+}
+
+.map-cluster > span {
+  top: 2px;
+  right: 2px;
+  min-width: 20px;
+  height: 20px;
+}
+.video-marker.priority-video b {
+  font-size: 9px;
+  line-height: 11px;
 }

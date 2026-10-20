@@ -1,4 +1,8 @@
 export type MapVideoCandidate = { id: string; x: number; y: number; width: number; height: number };
+export const mapMarkerSize = {
+  video: { width: 60, height: 90 },
+  place: { width: 46, height: 64 },
+} as const;
 export type MapVideoViewport = {
   width: number;
   height: number;
@@ -83,6 +87,39 @@ export function selectMapVideos(
   return best.map((item) => item.id);
 }
 
+// Videos claim space first. Photos and clusters share the same collision budget,
+// including their titles and badges, which are contained inside each card.
+export function selectMapMarkers(
+  candidates: (MapVideoCandidate & { video: boolean })[],
+  previous: { videos: string[]; places: string[] },
+  viewport: MapVideoViewport,
+  activeId?: string,
+) {
+  const active = candidates.find((item) => item.id === activeId && !item.video);
+  const reserved =
+    active && selectMapVideos([active], [active.id], viewport, 1).length ? [active] : [];
+  const videos = selectMapVideos(
+    candidates.filter(
+      (item) => item.video && reserved.every((other) => !videosOverlap(item, other)),
+    ),
+    previous.videos,
+    viewport,
+  );
+  const occupied = [...reserved, ...candidates.filter((item) => videos.includes(item.id))];
+  const photos = candidates.filter((item) => !item.video && item.id !== active?.id);
+  const order = [...previous.places, ...photos.map((item) => item.id)];
+  const places = reserved.map((item) => item.id);
+  for (const id of new Set(order)) {
+    const item = photos.find((candidate) => candidate.id === id);
+    if (!item || occupied.some((other) => videosOverlap(item, other))) continue;
+    if (!selectMapVideos([item], previous.places.includes(id) ? [id] : [], viewport, 1).length)
+      continue;
+    places.push(id);
+    occupied.push(item);
+  }
+  return { videos, places };
+}
+
 type GeoVideo = { id: string; longitude: number; latitude: number };
 const mercator = (longitude: number, latitude: number) => ({
   x: (longitude + 180) / 360,
@@ -112,8 +149,7 @@ export function mapVideoCamera(
         id: point.id,
         x: (point.x - center.x) * 512 * 2 ** zoom + focusX,
         y: (point.y - center.y) * 512 * 2 ** zoom + focusY,
-        width: 50,
-        height: 76,
+        ...mapMarkerSize.video,
       })),
       [],
       viewport,

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { selectMapVideos, videosOverlap, mapVideoCamera } from '../lib/map-video-layout';
+import {
+  selectMapVideos,
+  videosOverlap,
+  mapVideoCamera,
+  selectMapMarkers,
+  mapMarkerSize,
+} from '../lib/map-video-layout';
 const viewport = { width: 600, height: 450 };
 const point = (id: string, x: number, y = 200) => ({ id, x, y, width: 50, height: 76 });
 describe('stable geographic video selection', () => {
@@ -91,5 +97,65 @@ describe('stable geographic video selection', () => {
     const camera = mapVideoCamera(videos, viewport, { longitude: 38.76, latitude: 55.1, zoom: 7 });
     expect(camera.zoom).toBeGreaterThan(7);
     expect(JSON.stringify(videos)).toBe(snapshot);
+  });
+});
+
+describe('shared marker collision space', () => {
+  const video = (id: string, x: number) => ({ id, x, y: 200, video: true, ...mapMarkerSize.video });
+  const photo = (id: string, x: number, y = 200) => ({
+    id,
+    x,
+    y,
+    video: false,
+    ...mapMarkerSize.place,
+  });
+  it('excludes photos and clusters that cover videos, while keeping separated places', () => {
+    const candidates = [
+      video('video', 100),
+      photo('photo-overlap', 145),
+      photo('cluster', 300),
+      photo('photo-over-cluster', 320),
+      photo('separate', 420),
+    ];
+    const snapshot = JSON.stringify(candidates);
+    const result = selectMapMarkers(
+      candidates,
+      { videos: ['video'], places: ['photo-overlap', 'cluster'] },
+      viewport,
+    );
+    expect(result).toEqual({ videos: ['video'], places: ['cluster', 'separate'] });
+    const selected = candidates.filter((p) => [...result.videos, ...result.places].includes(p.id));
+    expect(
+      selected.every((p, i) => selected.slice(i + 1).every((other) => !videosOverlap(p, other))),
+    ).toBe(true);
+    expect(JSON.stringify(candidates)).toBe(snapshot);
+  });
+  it('preserves an existing video when panning introduces a photo over it', () => {
+    expect(
+      selectMapMarkers(
+        [photo('new', 130), video('kept', 100)],
+        { videos: ['kept'], places: [] },
+        viewport,
+      ),
+    ).toEqual({ videos: ['kept'], places: [] });
+  });
+  it('reserves space for an explicitly opened ordinary place', () => {
+    expect(
+      selectMapMarkers(
+        [video('video', 100), photo('opened', 120)],
+        { videos: ['video'], places: [] },
+        viewport,
+        'opened',
+      ),
+    ).toEqual({ videos: [], places: ['opened'] });
+  });
+  it('shows a hidden photo as soon as a video leaves its space', () => {
+    expect(
+      selectMapMarkers(
+        [video('video', -100), photo('photo', 130)],
+        { videos: ['video'], places: [] },
+        viewport,
+      ),
+    ).toEqual({ videos: [], places: ['photo'] });
   });
 });

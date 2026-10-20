@@ -13,7 +13,7 @@ import {
   Pause,
 } from 'lucide-react';
 import { createMapVideoPreview } from '@/lib/map-video-preview';
-import { selectMapVideos, mapVideoCamera } from '@/lib/map-video-layout';
+import { selectMapMarkers, mapVideoCamera, mapMarkerSize } from '@/lib/map-video-layout';
 import type { Place, RouteResult } from '@/lib/types';
 import type { ExplorerRegion } from '@/lib/regions';
 const localStyle: maplibregl.StyleSpecification = {
@@ -181,6 +181,7 @@ export default function ExplorerMap({
     const connection = (
       navigator as Navigator & { connection?: EventTarget & { saveData?: boolean } }
     ).connection;
+    let selectedPlaces: string[] = [];
     function syncPreviews() {
       const bounds = m.getContainer().getBoundingClientRect();
       if (!bounds.width || !bounds.height) {
@@ -188,32 +189,38 @@ export default function ExplorerMap({
         return;
       }
       const state = playbackState.current;
-      const candidates = [...records.entries()]
-        .filter(([, record]) => record.marker.getElement().classList.contains('priority-video'))
-        .map(([id, record]) => {
-          const point = m.project(record.marker.getLngLat());
-          const element = record.marker.getElement();
-          return {
-            id,
-            x: point.x,
-            y: point.y,
-            width: element.offsetWidth || 50,
-            height: element.offsetHeight || 76,
-          };
-        });
+      const candidates = [...records.entries()].map(([id, record]) => {
+        const point = m.project(record.marker.getLngLat());
+        const element = record.marker.getElement();
+        const video = element.classList.contains('priority-video');
+        return {
+          id,
+          x: point.x,
+          y: point.y,
+          video,
+          ...mapMarkerSize[video ? 'video' : 'place'],
+        };
+      });
       const previous = state.active
         ? [state.active.id, ...selectedVideos.current.filter((id) => id !== state.active!.id)]
         : selectedVideos.current;
-      const selected = selectMapVideos(candidates, previous, {
-        width: bounds.width,
-        height: bounds.height,
-        top: Math.min(130, bounds.height / 4),
-        bottom: 40,
-        left: 12,
-        right: 60,
-      });
+      const selection = selectMapMarkers(
+        candidates,
+        { videos: previous, places: selectedPlaces },
+        {
+          width: bounds.width,
+          height: bounds.height,
+          top: Math.min(130, bounds.height / 4),
+          bottom: 40,
+          left: 12,
+          right: 60,
+        },
+        state.active?.id,
+      );
+      const selected = selection.videos;
       selectedVideos.current = selected;
-      const visible = new Set(selected);
+      selectedPlaces = selection.places;
+      const visible = new Set([...selected, ...selectedPlaces]);
       const allowed =
         state.autoplay &&
         state.previewsVisible &&
@@ -227,13 +234,33 @@ export default function ExplorerMap({
       for (const [id, record] of records) {
         const element = record.marker.getElement();
         element.classList.toggle('is-active', state.active?.id === id);
+        element.style.display = visible.has(id) ? '' : 'none';
+        element.dataset.mapMarkerVisible = String(visible.has(id));
         if (element.classList.contains('priority-video')) {
-          element.style.display = visible.has(id) ? '' : 'none';
           element.dataset.mapVideoVisible = String(visible.has(id));
           if (!visible.has(id) || !allowed) record.preview?.stop();
         }
       }
       for (const id of selected) if (allowed) records.get(id)?.preview?.start();
+      // Fallback geography labels must not cover cards or each other either.
+      const occupied = [...records.values()]
+        .map((record) => record.marker.getElement())
+        .filter((element) => element.dataset.mapMarkerVisible === 'true')
+        .map((element) => element.getBoundingClientRect());
+      m.getContainer()
+        .querySelectorAll<HTMLElement>('.geography-label')
+        .forEach((label) => {
+          const rect = label.getBoundingClientRect();
+          const overlaps = occupied.some(
+            (other) =>
+              rect.left < other.right + 8 &&
+              rect.right > other.left - 8 &&
+              rect.top < other.bottom + 8 &&
+              rect.bottom > other.top - 8,
+          );
+          label.style.visibility = overlaps ? 'hidden' : '';
+          if (!overlaps) occupied.push(rect);
+        });
     }
     syncVideoState.current = syncPreviews;
     const sourceId = 'places';
@@ -365,9 +392,12 @@ export default function ExplorerMap({
             else callbacks.current.onSelect(p);
           };
         }
+        const size = mapMarkerSize[btn.classList.contains('priority-video') ? 'video' : 'place'];
+        btn.style.setProperty('--map-marker-width', `${size.width}px`);
+        btn.style.setProperty('--map-marker-height', `${size.height}px`);
         const marker = new maplibregl.Marker({
           element: btn,
-          anchor: btn.classList.contains('priority-video') ? 'center' : 'bottom',
+          anchor: 'center',
         })
           .setLngLat(coords)
           .addTo(m);
@@ -496,6 +526,7 @@ export default function ExplorerMap({
       element.setAttribute('aria-hidden', 'true');
       return new maplibregl.Marker({ element }).setLngLat([lng, lat]).addTo(m);
     });
+    syncVideoState.current?.();
     return () => list.forEach((l) => l.remove());
   }, [ready, local, region]);
   return (

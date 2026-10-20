@@ -26,7 +26,8 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   await expect(page.locator('.priority-video')).toHaveCount(7);
   await expect
     .poll(() => page.locator('.priority-video[data-map-video-visible="true"]').count())
-    .toBeGreaterThanOrEqual(info.project.name === 'mobile' ? 4 : 5);
+    // Larger readable cards take precedence over forcing five into a dense location.
+    .toBeGreaterThanOrEqual(info.project.name === 'mobile' ? 3 : 4);
   await expect
     .poll(() =>
       page
