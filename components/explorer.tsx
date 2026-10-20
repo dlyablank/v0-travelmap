@@ -63,6 +63,13 @@ export default function Explorer() {
   const [reelId, setReelId] = useState<string | null>(null);
   const [reelPlaces, setReelPlaces] = useState<Place[]>([]);
   const gridRef = useRef<HTMLDivElement>(null);
+  const reelReturn = useRef<{ fromMap: boolean; place: Place | null }>({
+    fromMap: false,
+    place: null,
+  });
+  const rememberReelPlace = useCallback((place: Place) => {
+    reelReturn.current.place = place;
+  }, []);
   const [category, setCategory] = useState('Все места');
   const [query, setQuery] = useState('');
   const [savedOnly, setSavedOnly] = useState(false);
@@ -149,6 +156,25 @@ export default function Explorer() {
     !active && !reelId && !tripOpen && !importOpen && !about && !pickMode,
     filtered,
   );
+  function openReel(place: Place, fromMap = false) {
+    reelReturn.current = { fromMap, place };
+    setActive(null);
+    const videos = filtered.filter((p) => p.video);
+    setReelPlaces(videos.some((p) => p.id === place.id) ? videos : [place, ...videos]);
+    setReelId(place.id);
+  }
+  function closeReel() {
+    setReelId(null);
+    const { fromMap, place } = reelReturn.current;
+    if (fromMap && place) {
+      setMobileView('map');
+      setFeedMode(false);
+      selectPlace(place);
+      requestAnimationFrame(() =>
+        document.getElementById('map-watch-video')?.focus({ preventScroll: true }),
+      );
+    }
+  }
   function addToTrip(id: string) {
     if (!trip.includes(id) && trip.length >= 20) {
       notify('В одну поездку можно добавить до 20 мест.');
@@ -418,9 +444,7 @@ export default function Explorer() {
                     data-preview-url={p.video?.previewUrl || p.video?.playbackUrl}
                     onClick={() => {
                       if (p.video) {
-                        setActive(null);
-                        setReelPlaces(filtered.filter((place) => place.video));
-                        setReelId(p.id);
+                        openReel(p);
                       } else selectPlace(p);
                     }}
                   >
@@ -450,6 +474,7 @@ export default function Explorer() {
                     </span>
                   </button>
                   <button
+                    disabled={!hydrated}
                     className={`save-button ${hydrated && saved.includes(p.id) ? 'saved' : ''}`}
                     aria-label={`${saved.includes(p.id) ? 'Убрать из сохранённого' : 'Сохранить'} ${p.name}`}
                     onClick={() => toggleSaved(p.id)}
@@ -468,6 +493,7 @@ export default function Explorer() {
                   </span>
                   <button
                     aria-label={`${trip.includes(p.id) ? 'Убрать из поездки' : 'Добавить в поездку'} ${p.name}`}
+                    disabled={!hydrated}
                     className={hydrated && trip.includes(p.id) ? 'added' : ''}
                     onClick={() => addToTrip(p.id)}
                   >
@@ -551,6 +577,16 @@ export default function Explorer() {
             >
               <div className="preview-media">
                 <VideoPlayer place={active} />
+                {active.video && (
+                  <button
+                    id="map-watch-video"
+                    className="preview-watch-button"
+                    onClick={() => openReel(active, true)}
+                  >
+                    <Play size={17} />
+                    Смотреть видео
+                  </button>
+                )}
                 <button
                   className="preview-close"
                   aria-label="Закрыть место"
@@ -674,7 +710,8 @@ export default function Explorer() {
           places={reelPlaces}
           saved={saved}
           trip={trip}
-          onClose={() => setReelId(null)}
+          onClose={closeReel}
+          onCurrentChange={rememberReelPlace}
           onSave={toggleSaved}
           onTrip={addToTrip}
           onMap={(place) => {

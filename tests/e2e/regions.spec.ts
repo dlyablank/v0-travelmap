@@ -4,9 +4,11 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   page,
 }, info) => {
   await page.route('https://tiles.openfreemap.org/**', (r) => r.abort());
+  await page.route('**/api/places', (r) => r.fulfill({ json: { places: [] } }));
   await page.goto('/');
   const chooser = page.getByRole('combobox', { name: 'Регион путешествия' });
   await expect(chooser).toHaveValue('karelia');
+  await expect(chooser).toBeEnabled();
   if (info.project.name === 'mobile')
     await page.getByRole('button', { name: 'Лента', exact: true }).click();
   await page
@@ -59,10 +61,13 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   await expect(reel).toBeVisible();
   await expect
     .poll(() =>
-      reel.locator('video').evaluate((v: HTMLVideoElement) => !v.paused && v.currentTime > 0.2),
+      reel
+        .locator('video[data-active="true"]')
+        .evaluate((v: HTMLVideoElement) => !v.paused && v.currentTime > 0.2),
     )
     .toBe(true);
   await expect(reel.locator('.reel-top')).toContainText('1 / 7');
+  await reel.locator('.reel-place-details > summary').click();
   await expect(reel.getByRole('region', { name: 'Автор и происхождение видео' })).toContainText(
     'Андрей Елбаев',
   );

@@ -18,6 +18,7 @@ test('discovery, author, mini-map, selected stops and trip cover stay connected'
       },
     }),
   );
+  await page.route('**/api/places', (r) => r.fulfill({ json: { places: [] } }));
   await page.goto('/');
   if (testInfo.project.name === 'mobile')
     await page.getByRole('button', { name: 'Лента', exact: true }).click();
@@ -32,6 +33,7 @@ test('discovery, author, mini-map, selected stops and trip cover stay connected'
   const dot = reel.getByTestId('mini-map-current');
   await expect(dot).toHaveAttribute('data-place-id', 'suisaari');
   await expect(reel.locator('.reel-mini-map svg path').first()).toBeAttached();
+  await reel.locator('.reel-place-details > summary').click();
   const author = reel.getByRole('region', { name: 'Автор и происхождение видео' });
   await expect(
     author.getByRole('link', { name: 'Автор видео: 基日島', exact: true }),

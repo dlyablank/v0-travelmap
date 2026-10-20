@@ -130,7 +130,19 @@ test('upload an owned MP4, persist a new geolocated point, and play only the act
   expect(media.status()).toBe(206);
   expect((await media.body()).length).toBe(100);
   await page.getByRole('button', { name: 'Следующее место', exact: true }).click();
-  await expect(page.locator('video')).toHaveCount(0);
+  // The current demo now has real videos: wrapping reaches another playable
+  // place. Verify that the uploaded player is released, not that all video vanishes.
+  await expect
+    .poll(() =>
+      page
+        .locator('video')
+        .evaluateAll(
+          (videos, previousSrc) => videos.every((v) => v.getAttribute('src') !== previousSrc),
+          src,
+        ),
+    )
+    .toBe(true);
+  await expect(page.locator('.active-preview video[data-active="true"]')).toHaveCount(1);
   const list = await request.get('/api/places');
   const data = await list.json();
   expect(data.places.some((p: { name: string }) => p.name === title)).toBe(true);

@@ -7,6 +7,7 @@ import { VideoPlayer } from './video-player';
 import { PlaceImage } from './place-image';
 import { ReelMiniMap } from './reel-mini-map';
 import { VideoAttribution } from './video-attribution';
+import { useVideoBuffer } from '@/lib/video-buffer';
 
 export function VideoReel({
   places,
@@ -17,6 +18,7 @@ export function VideoReel({
   onSave,
   onTrip,
   onMap,
+  onCurrentChange,
 }: {
   places: Place[];
   initialId: string;
@@ -26,6 +28,7 @@ export function VideoReel({
   onSave: (id: string) => void;
   onTrip: (id: string) => void;
   onMap: (place: Place) => void;
+  onCurrentChange: (place: Place) => void;
 }) {
   const [index, setIndex] = useState(() =>
     Math.max(
@@ -34,6 +37,7 @@ export function VideoReel({
     ),
   );
   const [muted, setMuted] = useState(true);
+  const buffer = useVideoBuffer();
   const track = useRef<HTMLDivElement>(null);
   const opener = useRef(document.activeElement as HTMLElement | null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,6 +49,9 @@ export function VideoReel({
     if (track.current && places.length === 1) track.current.scrollTop = track.current.clientHeight;
     setIndex((i) => (i + delta + places.length) % places.length);
   };
+  useEffect(() => {
+    onCurrentChange(place);
+  }, [place, onCurrentChange]);
   useLayoutEffect(() => {
     const el = track.current;
     if (el) el.scrollTop = el.clientHeight;
@@ -70,6 +77,7 @@ export function VideoReel({
         <D.Overlay className="reel-backdrop" />
         <D.Content
           className="video-reel"
+          onEscapeKeyDown={(event) => event.stopPropagation()}
           onOpenAutoFocus={() => {
             if (track.current) track.current.scrollTop = track.current.clientHeight;
           }}
@@ -78,6 +86,7 @@ export function VideoReel({
             opener.current?.focus({ preventScroll: true });
           }}
           onKeyDown={(event) => {
+            if ((event.target as HTMLElement).closest('.reel-info-sheet,summary')) return;
             if (['ArrowDown', 'PageDown', 'ArrowUp', 'PageUp'].includes(event.key)) {
               event.preventDefault();
               event.stopPropagation();
@@ -137,14 +146,27 @@ export function VideoReel({
           >
             {[-1, 0, 1].map((offset) => {
               const item = places[wrap(index + offset)];
+              // Stable place keys keep the exact preloaded video element when it becomes current.
+              // A one/two-item cyclic feed needs poster-only mirror slides, not duplicate players.
+              const mirror =
+                offset !== 0 &&
+                (item.id === place.id || (offset === -1 && item.id === places[wrap(index + 1)].id));
               return (
-                <article className="reel-slide" key={offset} aria-hidden={offset !== 0}>
-                  {offset === 0 ? (
+                <article
+                  className="reel-slide"
+                  key={mirror ? `${item.id}:mirror:${offset}` : item.id}
+                  aria-hidden={offset !== 0}
+                  inert={offset !== 0}
+                  data-place-id={item.id}
+                  data-active={offset === 0}
+                >
+                  {!mirror && (offset === 0 || buffer) ? (
                     <VideoPlayer
-                      key={item.id}
                       place={item}
+                      active={offset === 0}
                       muted={muted}
                       onMutedChange={setMuted}
+                      preload="auto"
                     />
                   ) : (
                     <PlaceImage place={item} />
@@ -165,11 +187,48 @@ export function VideoReel({
               {place.category} · {place.city}
             </span>
             <h2>{place.name}</h2>
-            <p>{place.description}</p>
-            <VideoAttribution place={place} />
-            <button className="reel-map-button" onClick={() => onMap(place)}>
-              <MapPin size={16} /> Показать на карте
-            </button>
+            {place.video?.credit && (
+              <div className="reel-author">
+                <a
+                  aria-label={`Автор видео: ${place.video.credit.author}`}
+                  href={place.video.credit.authorUrl || place.video.credit.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Видео: {place.video.credit.author}
+                </a>
+                <a href={place.video.credit.licenseUrl} target="_blank" rel="noopener noreferrer">
+                  {place.video.credit.license}
+                </a>
+              </div>
+            )}
+            <div className="reel-primary-actions">
+              <button
+                className="reel-trip-button"
+                aria-label={trip.includes(place.id) ? 'Убрать из поездки' : 'Добавить в поездку'}
+                aria-pressed={trip.includes(place.id)}
+                onClick={() => onTrip(place.id)}
+              >
+                {trip.includes(place.id) ? <Check size={18} /> : <Plus size={18} />}
+                {trip.includes(place.id) ? 'В поездке' : 'В поездку'}
+              </button>
+              <details
+                className="reel-place-details"
+                onToggle={(e) => {
+                  if (e.currentTarget.open && track.current)
+                    track.current.scrollTop = track.current.clientHeight;
+                }}
+              >
+                <summary>О месте</summary>
+                <div className="reel-info-sheet">
+                  <p>{place.description}</p>
+                  <VideoAttribution place={place} />
+                  <button className="reel-map-button" onClick={() => onMap(place)}>
+                    <MapPin size={16} /> Показать на карте
+                  </button>
+                </div>
+              </details>
+            </div>
           </div>
           <div className="reel-actions">
             <button
@@ -179,14 +238,6 @@ export function VideoReel({
             >
               <Bookmark fill={saved.includes(place.id) ? 'currentColor' : 'none'} />
               <small>Сохранить</small>
-            </button>
-            <button
-              aria-label={trip.includes(place.id) ? 'Убрать из поездки' : 'Добавить в поездку'}
-              aria-pressed={trip.includes(place.id)}
-              onClick={() => onTrip(place.id)}
-            >
-              {trip.includes(place.id) ? <Check /> : <Plus />}
-              <small>В поездку</small>
             </button>
           </div>
           <div className="reel-navigation">
