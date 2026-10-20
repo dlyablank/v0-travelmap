@@ -10,7 +10,8 @@ import { VideoAttribution } from './video-attribution';
 import { useVideoBuffer } from '@/lib/video-buffer';
 
 export function VideoReel({
-  places,
+  places: initialPlaces,
+  onLoadMore,
   initialId,
   saved,
   trip,
@@ -21,6 +22,7 @@ export function VideoReel({
   onCurrentChange,
 }: {
   places: Place[];
+  onLoadMore: (seen: string[], signal: AbortSignal) => Promise<Place[]>;
   initialId: string;
   saved: string[];
   trip: string[];
@@ -30,6 +32,9 @@ export function VideoReel({
   onMap: (place: Place) => void;
   onCurrentChange: (place: Place) => void;
 }) {
+  const [places, setPlaces] = useState(initialPlaces);
+  const [feedState, setFeedState] = useState<'loading' | 'ready' | 'end' | 'error'>('ready');
+  const [reload, setReload] = useState(0);
   const [index, setIndex] = useState(() =>
     Math.max(
       0,
@@ -42,12 +47,40 @@ export function VideoReel({
   const opener = useRef(document.activeElement as HTMLElement | null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gesture = useRef<{ start: number; delta: number } | null>(null);
-  const wrap = (i: number) => (i + places.length) % places.length;
-  const place = places[wrap(index)];
+  const place = places[index];
+  const nearEnd = index >= places.length - 3;
+  useEffect(() => {
+    if (!nearEnd) return;
+    const controller = new AbortController();
+    Promise.resolve()
+      .then(() => {
+        if (controller.signal.aborted) return [];
+        setFeedState('loading');
+        return onLoadMore(
+          places.map((p) => p.id),
+          controller.signal,
+        );
+      })
+      .then((incoming) => {
+        if (controller.signal.aborted) return;
+        const seen = new Set(places.map((p) => p.id));
+        const fresh = incoming.filter((p) => {
+          if (!p.video || seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
+        });
+        if (fresh.length) setPlaces((previous) => [...previous, ...fresh]);
+        setFeedState(fresh.length ? 'ready' : 'end');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setFeedState('error');
+      });
+    return () => controller.abort();
+  }, [nearEnd, places, onLoadMore, reload]);
   const step = (delta: number) => {
     if (timer.current) clearTimeout(timer.current);
-    if (track.current && places.length === 1) track.current.scrollTop = track.current.clientHeight;
-    setIndex((i) => (i + delta + places.length) % places.length);
+    if (track.current) track.current.scrollTop = track.current.clientHeight;
+    setIndex((i) => Math.max(0, Math.min(places.length - 1, i + delta)));
   };
   useEffect(() => {
     onCurrentChange(place);
@@ -96,8 +129,7 @@ export function VideoReel({
         >
           <D.Title className="reel-sr-only">Видео путешествий</D.Title>
           <D.Description className="reel-sr-only">
-            Листайте вверх и вниз, чтобы смотреть места. После последнего ролика лента продолжается
-            с первого.
+            Листайте вверх и вниз, чтобы смотреть места. Новые видео подгружаются по мере просмотра.
           </D.Description>
           <D.Close className="reel-close" aria-label="Закрыть видеоленту">
             <X />
@@ -145,22 +177,27 @@ export function VideoReel({
             }}
           >
             {[-1, 0, 1].map((offset) => {
-              const item = places[wrap(index + offset)];
-              // Stable place keys keep the exact preloaded video element when it becomes current.
-              // A one/two-item cyclic feed needs poster-only mirror slides, not duplicate players.
-              const mirror =
-                offset !== 0 &&
-                (item.id === place.id || (offset === -1 && item.id === places[wrap(index + 1)].id));
+              const item = places[index + offset];
+              if (!item)
+                return (
+                  <article
+                    className="reel-slide reel-boundary"
+                    key={`boundary:${offset}`}
+                    aria-hidden
+                    inert
+                  />
+                );
+              // Stable place keys preserve the preloaded player when it becomes current.
               return (
                 <article
                   className="reel-slide"
-                  key={mirror ? `${item.id}:mirror:${offset}` : item.id}
+                  key={item.id}
                   aria-hidden={offset !== 0}
                   inert={offset !== 0}
                   data-place-id={item.id}
                   data-active={offset === 0}
                 >
-                  {!mirror && (offset === 0 || buffer) ? (
+                  {offset === 0 || buffer ? (
                     <VideoPlayer
                       place={item}
                       active={offset === 0}
@@ -177,9 +214,6 @@ export function VideoReel({
           </div>
           <div className="reel-top">
             <span>Вдохновение рядом</span>
-            <small>
-              {wrap(index) + 1} / {places.length}
-            </small>
           </div>
           <ReelMiniMap places={places} current={place} onOpen={() => onMap(place)} />
           <div className="reel-details" key={place.id}>
@@ -257,14 +291,33 @@ export function VideoReel({
             </button>
           </div>
           <div className="reel-navigation">
-            <button aria-label="Предыдущее видео" onClick={() => step(-1)}>
+            <button aria-label="Предыдущее видео" disabled={index === 0} onClick={() => step(-1)}>
               <ArrowUp />
             </button>
-            <button aria-label="Следующее видео" onClick={() => step(1)}>
+            <button
+              aria-label="Следующее видео"
+              disabled={index === places.length - 1}
+              onClick={() => step(1)}
+            >
               <ArrowDown />
             </button>
           </div>
-          <div className="reel-hint">Листайте вверх · новые места дальше</div>
+          {index === places.length - 1 ? (
+            <div className="reel-feed-status" role="status">
+              <span>
+                {feedState === 'loading'
+                  ? 'Загружаем новые видео…'
+                  : feedState === 'error'
+                    ? 'Не удалось загрузить видео'
+                    : 'Пока новых видео нет'}
+              </span>
+              {feedState !== 'loading' && (
+                <button onClick={() => setReload((v) => v + 1)}>Проверить ещё</button>
+              )}
+            </div>
+          ) : (
+            <div className="reel-hint">Листайте вверх · новые места дальше</div>
+          )}
         </D.Content>
       </D.Portal>
     </D.Root>

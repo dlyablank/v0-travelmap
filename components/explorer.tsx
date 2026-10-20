@@ -69,6 +69,9 @@ export default function Explorer() {
   });
   const rememberReelPlace = useCallback((place: Place) => {
     reelReturn.current.place = place;
+    setServerPlaces((previous) =>
+      previous.some((p) => p.id === place.id) ? previous : [...previous, place],
+    );
   }, []);
   const [category, setCategory] = useState('Все места');
   const [query, setQuery] = useState('');
@@ -156,17 +159,41 @@ export default function Explorer() {
     !active && !reelId && !tripOpen && !importOpen && !about && !pickMode,
     filtered,
   );
+  const loadMoreVideos = useCallback(
+    async (seen: string[], signal: AbortSignal) => {
+      let candidates = allPlaces;
+      try {
+        const response = await fetch('/api/places', { signal, cache: 'no-store' });
+        if (!response.ok) throw new Error('Feed unavailable');
+        const data = await response.json();
+        if (Array.isArray(data.places)) {
+          candidates = Array.from(
+            new Map([...allPlaces, ...data.places].map((p: Place) => [p.id, p])).values(),
+          );
+        }
+      } catch (error) {
+        if (signal.aborted || !candidates.some((p) => p.video && !seen.includes(p.id))) throw error;
+      }
+      return candidates.filter((p) => p.video && !seen.includes(p.id)).slice(0, 6);
+    },
+    [allPlaces],
+  );
   function openReel(place: Place, fromMap = false) {
     reelReturn.current = { fromMap, place };
     setActive(null);
     const videos = filtered.filter((p) => p.video);
-    setReelPlaces(videos.some((p) => p.id === place.id) ? videos : [place, ...videos]);
+    const start = videos.findIndex((p) => p.id === place.id);
+    setReelPlaces(
+      start < 0 ? [place, ...videos] : [...videos.slice(start), ...videos.slice(0, start)],
+    );
     setReelId(place.id);
   }
   function closeReel() {
     setReelId(null);
     const { fromMap, place } = reelReturn.current;
     if (fromMap && place) {
+      const destination = regions.find((r) => r.name === place.region);
+      if (destination && destination.id !== region.id) setRegion(destination.id);
       setMobileView('map');
       setFeedMode(false);
       selectPlace(place);
@@ -176,7 +203,8 @@ export default function Explorer() {
     }
   }
   function addToTrip(id: string) {
-    if (!trip.includes(id) && trip.length >= 20) {
+    const currentTrip = useExplorer.getState().trip;
+    if (!currentTrip.includes(id) && currentTrip.length >= 20) {
       notify('В одну поездку можно добавить до 20 мест.');
       return;
     }
@@ -733,13 +761,21 @@ export default function Explorer() {
           key={reelId}
           initialId={reelId}
           places={reelPlaces}
+          onLoadMore={loadMoreVideos}
           saved={saved}
           trip={trip}
           onClose={closeReel}
           onCurrentChange={rememberReelPlace}
           onSave={toggleSaved}
-          onTrip={addToTrip}
+          onTrip={(id) => {
+            const place = reelReturn.current.place;
+            const destination = regions.find((r) => r.name === place?.region);
+            if (destination && destination.id !== region.id) setRegion(destination.id);
+            addToTrip(id);
+          }}
           onMap={(place) => {
+            const destination = regions.find((r) => r.name === place.region);
+            if (destination && destination.id !== region.id) setRegion(destination.id);
             setReelId(null);
             setMobileView('map');
             setFeedMode(false);

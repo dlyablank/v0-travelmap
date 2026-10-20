@@ -66,7 +66,7 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
         .evaluate((v: HTMLVideoElement) => !v.paused && v.currentTime > 0.2),
     )
     .toBe(true);
-  await expect(reel.locator('.reel-top')).toContainText('1 / 7');
+  await expect(reel.locator('.reel-top small')).toHaveCount(0);
   await reel.locator('.reel-place-details > summary').click();
   await expect(reel.getByRole('region', { name: 'Автор и происхождение видео' })).toContainText(
     'Андрей Елбаев',
@@ -81,6 +81,8 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   await reel.getByRole('button', { name: 'Закрыть видеоленту' }).click();
   await page.reload();
   await expect(chooser).toHaveValue('kolomna');
+  if (info.project.name === 'mobile')
+    await page.getByRole('button', { name: 'Лента', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Выбранные остановки' })).toContainText(
     'Стены Коломенского кремля',
   );

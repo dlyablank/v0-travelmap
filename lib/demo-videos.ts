@@ -43,6 +43,7 @@ export const demoVideos: Record<string, NonNullable<Place['video']>> = {
       sourceUrl: 'https://commons.wikimedia.org/wiki/File:Chimes_of_Kizhi_2022.webm',
       license: 'Public domain',
       licenseUrl: 'https://commons.wikimedia.org/wiki/File:Chimes_of_Kizhi_2022.webm#Licensing',
+      changes: 'Движущееся превью: фрагмент 4 с, уменьшен, без звука.',
     },
   },
   koirinoja: {
@@ -55,6 +56,7 @@ export const demoVideos: Record<string, NonNullable<Place['video']>> = {
       sourceUrl: 'https://commons.wikimedia.org/wiki/File:Unterer_Koyrinoja-Wasserfall.ogg',
       license: 'CC BY-SA 4.0',
       licenseUrl: shareAlike,
+      changes: 'Движущееся превью: фрагмент 4 с, уменьшен, без звука.',
     },
   },
 };

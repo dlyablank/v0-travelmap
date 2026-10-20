@@ -69,7 +69,7 @@ export default function ExplorerMap({
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
   const framedVideos = useRef(false);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState<maplibregl.Map | null>(null);
   const [local, setLocal] = useState(true);
   const [error, setError] = useState('');
   const [legend, setLegend] = useState(false);
@@ -116,7 +116,7 @@ export default function ExplorerMap({
       );
       m.on('load', () => {
         if (destroyed) return;
-        setReady(true);
+        setReady(m);
         callbacks.current.onReady?.();
       });
       m.on('click', (e) => {
@@ -132,11 +132,11 @@ export default function ExplorerMap({
         })
         .then((style) => {
           if (!destroyed) {
-            setReady(false);
+            setReady(null);
             m.setStyle(style);
             m.once('style.load', () => {
               setLocal(false);
-              setReady(true);
+              setReady(m);
             });
           }
         })
@@ -155,7 +155,7 @@ export default function ExplorerMap({
   }, [region]);
   useEffect(() => {
     const current = map.current;
-    if (!current || !ready) return;
+    if (!current || ready !== current) return;
     const m = current;
     const records = new Map<
       string,
@@ -419,7 +419,7 @@ export default function ExplorerMap({
   }, [places, ready, active, autoplay, previewsVisible, pickMode, region]);
   useEffect(() => {
     const m = map.current;
-    if (!m || !ready || framedVideos.current) return;
+    if (!m || ready !== m || framedVideos.current) return;
     framedVideos.current = true;
     const videos = places.filter((p) => p.video);
     if (!videos.length || active || route || pickMode) return;
@@ -432,7 +432,7 @@ export default function ExplorerMap({
     });
   }, [ready, places, active, route, pickMode, region]);
   useEffect(() => {
-    if (active && ready)
+    if (active && ready === map.current)
       map.current?.flyTo({
         center: [active.longitude, active.latitude],
         zoom: Math.max(map.current.getZoom(), 9.2),
@@ -442,7 +442,7 @@ export default function ExplorerMap({
   }, [active, ready]);
   useEffect(() => {
     const current = map.current;
-    if (!current || !ready) return;
+    if (!current || ready !== current) return;
     const m = current;
     const data: GeoJSON.Feature = {
       type: 'Feature',
@@ -478,7 +478,7 @@ export default function ExplorerMap({
   }, [route, ready]);
   useEffect(() => {
     const m = map.current;
-    if (!m || !ready || !local) return;
+    if (!m || ready !== m || !local) return;
     const labels: [string, number, number][] =
       region.id === 'karelia'
         ? [

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('feed previews loop and the vertical reel cycles with a single active player', async ({
+test('feed previews loop and the vertical reel advances with a single active player', async ({
   page,
 }, testInfo) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => route.abort());
@@ -35,7 +35,7 @@ test('feed previews loop and the vertical reel cycles with a single active playe
   ).toBeVisible();
   const player = reel.locator('video[data-active="true"]');
   await expect(player).toHaveCount(1);
-  await expect(reel.locator('video')).toHaveCount(3);
+  await expect(reel.locator('video')).toHaveCount(2);
   await expect
     .poll(() => player.evaluate((v: HTMLVideoElement) => !v.paused && v.currentTime > 0.2))
     .toBe(true);
@@ -77,8 +77,9 @@ test('feed previews loop and the vertical reel cycles with a single active playe
   for (let i = 0; i < 6; i++)
     await reel.getByRole('button', { name: 'Следующее видео', exact: true }).click();
   await expect(
-    reel.getByRole('heading', { name: 'Суйсари на острове', exact: true }),
+    reel.getByRole('heading', { name: 'Стены Коломенского кремля', exact: true }),
   ).toBeVisible();
+  await expect(reel.locator('.reel-top small')).toHaveCount(0);
   await page.keyboard.press('ArrowUp');
   await expect(reel.getByRole('heading', { name: 'Остров Кижи', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');

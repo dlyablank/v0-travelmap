@@ -143,3 +143,37 @@ test('a browser autoplay refusal retries map previews on the first touch', async
   await page.getByRole('textbox', { name: 'Поиск по городу и региону' }).click();
   await expect(previews).toHaveCount(0);
 });
+
+test('map previews still move when the browser refuses every video play request', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = function () {
+      this.autoplay = false;
+      return Promise.reject(new DOMException('Playback blocked', 'NotAllowedError'));
+    };
+  });
+  await page.route('https://tiles.openfreemap.org/**', (r) => r.abort());
+  await page.route('**/api/places', (r) => r.fulfill({ json: { places: [] } }));
+  await page.goto('/');
+  const motions = page.locator('.map-wrap .motion-preview');
+  await expect(motions).toHaveCount(5);
+  await expect
+    .poll(() =>
+      motions.evaluateAll((images) =>
+        images.every(
+          (img) =>
+            (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth === 160,
+        ),
+      ),
+    )
+    .toBe(true);
+  const frame = await motions.first().screenshot();
+  await expect.poll(async () => (await motions.first().screenshot()).equals(frame)).toBe(false);
+  await page.getByRole('button', { name: 'Видео на карте', exact: true }).click();
+  await expect(motions).toHaveCount(0);
+  await page.getByRole('button', { name: 'Видео на карте', exact: true }).click();
+  await expect(motions).toHaveCount(5);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(motions).toHaveCount(0);
+});

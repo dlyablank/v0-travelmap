@@ -1,9 +1,34 @@
+import { demoVideos } from './demo-videos';
+
 // Small muted previews use the same public/served URL contract as S3 media.
 export function createMapVideoPreview(button: HTMLButtonElement, url: string, seconds?: number) {
   let video: HTMLVideoElement | null = null;
   let failed = false;
   let blocked = false;
   let pending = false;
+  let motion: HTMLImageElement | null = null;
+  let loadingTimer: ReturnType<typeof setTimeout> | undefined;
+  const demoId = Object.keys(demoVideos).find(
+    (id) => demoVideos[id].previewUrl === url || demoVideos[id].playbackUrl === url,
+  );
+  function showMotion() {
+    if (!video || motion || !demoId || document.hidden) return;
+    motion = document.createElement('img');
+    const image = motion;
+    motion.className = 'motion-preview';
+    motion.alt = '';
+    motion.src = `/media/videos/${demoId}-motion.webp`;
+    motion.onerror = () => {
+      image.remove();
+      if (motion === image) motion = null;
+    };
+    button.append(motion);
+  }
+  function clearMotion() {
+    clearTimeout(loadingTimer);
+    motion?.remove();
+    motion = null;
+  }
   const gestures = ['touchend', 'click', 'keydown'] as const;
   function clearGestureRetry() {
     gestures.forEach((event) => document.removeEventListener(event, retryAfterGesture, true));
@@ -30,6 +55,7 @@ export function createMapVideoPreview(button: HTMLButtonElement, url: string, se
           // Low Power Mode / browser policy may require a real user gesture.
           // Keep the poster and player so the first touch can resume this preview.
           blocked = true;
+          showMotion();
           gestures.forEach((event) =>
             document.addEventListener(event, retryAfterGesture, { capture: true, passive: true }),
           );
@@ -39,6 +65,7 @@ export function createMapVideoPreview(button: HTMLButtonElement, url: string, se
     );
   }
   function stop() {
+    clearMotion();
     clearGestureRetry();
     blocked = false;
     pending = false;
@@ -47,6 +74,7 @@ export function createMapVideoPreview(button: HTMLButtonElement, url: string, se
     if (!player) return;
     player.onplaying = null;
     player.onerror = null;
+    player.onpause = null;
     player.pause();
     player.removeAttribute('src');
     player.load();
@@ -78,15 +106,23 @@ export function createMapVideoPreview(button: HTMLButtonElement, url: string, se
         };
       player.setAttribute('aria-hidden', 'true');
       player.onplaying = () => {
+        clearMotion();
         button.classList.add('is-playing');
         clearGestureRetry();
       };
+      player.onpause = showMotion;
       player.onerror = () => {
-        failed = true;
-        stop();
+        if (demoId) showMotion();
+        else {
+          failed = true;
+          stop();
+        }
       };
       player.src = url;
       button.append(player);
+      loadingTimer = setTimeout(() => {
+        if (player.paused || player.readyState < 2) showMotion();
+      }, 1500);
       play();
     },
     stop,
