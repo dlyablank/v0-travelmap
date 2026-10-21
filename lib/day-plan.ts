@@ -19,7 +19,7 @@ export function dayPlan(stops: Place[], route: RouteResult | null, settings: Day
       cursor =
         cursor !== null && leg?.duration != null ? cursor + Math.ceil(leg.duration / 60) : null;
     const arrival = cursor;
-    const visit = settings.visits[place.id] ?? place.visitMinutes;
+    const visit = place.visitMinutes;
     if (cursor !== null) cursor += visit;
     return { place, arrival, departure: cursor, visit, leg };
   });

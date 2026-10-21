@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { routeInstructions, type RoutingStep } from '@/lib/route-instructions';
 import { straightRoute } from '@/lib/routing';
 const schema = z.object({
   stops: z
@@ -8,13 +9,20 @@ const schema = z.object({
     )
     .min(2)
     .max(20),
-  mode: z.enum(['car', 'walk']),
+  mode: z.enum(['car', 'walk', 'transit']),
 });
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success)
     return NextResponse.json({ error: 'Выберите от 2 до 20 корректных точек.' }, { status: 400 });
   const { stops, mode } = parsed.data;
+  if (mode === 'transit')
+    return NextResponse.json(
+      straightRoute(
+        stops,
+        'Актуальные рейсы, остановки и пересадки смотрите в Яндекс Картах для каждого перехода. Время пути неизвестно; расстояния показаны по прямой.',
+      ),
+    );
   if (mode === 'walk' && !process.env.WALKING_ROUTING_URL)
     return NextResponse.json(
       straightRoute(
@@ -29,7 +37,7 @@ export async function POST(request: Request) {
         : process.env.ROUTING_URL || 'https://router.project-osrm.org/route/v1/driving';
     const coords = stops.map((p) => `${p.longitude},${p.latitude}`).join(';');
     const res = await fetch(
-      `${base.replace(/\/$/, '')}/${coords}?overview=full&geometries=geojson&steps=false`,
+      `${base.replace(/\/$/, '')}/${coords}?overview=full&geometries=geojson&steps=true`,
       { signal: AbortSignal.any([request.signal, AbortSignal.timeout(12000)]), cache: 'no-store' },
     );
     if (!res.ok) throw new Error('upstream');
@@ -43,9 +51,10 @@ export async function POST(request: Request) {
       coordinates: r.geometry.coordinates,
       distance: r.distance,
       duration: r.duration,
-      legs: r.legs.map((l: { distance: number; duration: number }) => ({
+      legs: r.legs.map((l: { distance: number; duration: number; steps?: RoutingStep[] }) => ({
         distance: l.distance,
         duration: l.duration,
+        instructions: routeInstructions(l.steps),
       })),
       source: 'osrm',
     });

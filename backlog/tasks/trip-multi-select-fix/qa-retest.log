@@ -1,0 +1,3 @@
+Desktop1440x1000: unseeded 3-city Karelia clicks, reel remove/readd, map card remove/readd, feed selected, cross-city place URL, direct /trip all3, actual transit fallback all legs, no errors/overflow PASS
+Mobile iPhone13 emulation: unseeded 3-city Karelia clicks, reel remove/readd, map card remove/readd, feed selected, cross-city place URL, direct /trip all3, actual transit fallback all legs, no errors/overflow PASS
+Browser legacy migration exact QA-1 plus reorder/optimization/metadata arrival: 22 known + unknown preserved, no truncation, blocked >20, settings retained, no resurrection, delete/reload preserved unknown in trip+pending, optimization real transit result shown, metadata resolved to20 visible PASS

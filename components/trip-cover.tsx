@@ -11,7 +11,7 @@ export function TripCover({
 }: {
   stops: Place[];
   days: number;
-  mode: 'car' | 'walk';
+  mode: 'car' | 'walk' | 'transit';
   route: RouteResult | null;
 }) {
   const cover = stops.find((p) => p.video?.credit) || stops[0];
@@ -35,7 +35,8 @@ export function TripCover({
         </h3>
         <p>
           <MapPin size={12} /> Остановок: {stops.length} · {days === 1 ? 'Один день' : 'Два дня'} ·{' '}
-          {mode === 'car' ? 'Авто' : 'Пешком'} · {region}
+          {mode === 'car' ? 'Авто' : mode === 'transit' ? 'Общественный транспорт' : 'Пешком'} ·{' '}
+          {region}
         </p>
         {route && (
           <div className="trip-cover-stats">

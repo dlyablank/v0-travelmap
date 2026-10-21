@@ -15,7 +15,7 @@ export function TripRecommendations({
   stops: Place[];
   places: Place[];
   route: RouteResult;
-  mode: 'car' | 'walk';
+  mode: 'car' | 'walk' | 'transit';
   onAdd: (place: Place, index: number) => void;
 }) {
   const key = `${stops.map((p) => p.id).join(',')}:${mode}:${route.distance}:${route.duration}`;
@@ -83,7 +83,7 @@ export function TripRecommendations({
         <MapPin size={17} />
         <h3>По пути к новым впечатлениям</h3>
       </div>
-      <p>До трёх видео в этой локации. Добавляйте только то, что хочется увидеть.</p>
+      <p>До трёх видео в этом регионе. Добавляйте только то, что хочется увидеть.</p>
       {current.loading ? (
         <div role="status" className="recommendation-loading">
           <LoaderCircle size={16} className="spin" />

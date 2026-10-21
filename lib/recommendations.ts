@@ -1,6 +1,5 @@
 import type { Place, RouteResult } from './types';
 import { haversine } from './routing';
-import { locationId } from './locations';
 // Shortlist by proximity to the actual route; road detours are verified separately.
 function distanceToSegment(place: Place, a: [number, number], b: [number, number]) {
   const scale = Math.cos((place.latitude * Math.PI) / 180);
@@ -17,13 +16,13 @@ export function recommendationCandidates(
   stops: Place[],
   places: Place[],
   route: RouteResult,
-  mode: 'car' | 'walk',
+  mode: 'car' | 'walk' | 'transit',
 ) {
-  if (stops.length < 2 || route.source !== 'osrm') return [];
+  if (mode === 'transit' || stops.length < 2 || route.source !== 'osrm') return [];
   const selected = new Set(stops.map((p) => p.id));
   const geometry = route.coordinates;
   return places
-    .filter((p) => p.video && !selected.has(p.id) && locationId(p) === locationId(stops[0]))
+    .filter((p) => p.video && !selected.has(p.id) && p.region === stops[0].region)
     .map((place, priority) => {
       let corridor = Infinity;
       for (let i = 1; i < geometry.length; i++)

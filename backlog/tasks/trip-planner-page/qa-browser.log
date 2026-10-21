@@ -1,0 +1,4 @@
+Desktop1440x1000: loading/hydration, keyboard Tab, busy, late response after mode/order/location change, real walk/transit fallback API, unknown times, transit JSON, actual no-DB save, reload, console and overflow PASS
+Mobile Chromium iPhone13 emulation: loading/hydration, keyboard Tab, busy, late response after mode/order/location change, real walk/transit fallback API, unknown times, transit JSON, actual no-DB save, reload, console and overflow PASS
+20 custom test stops: max cap, 1–10/10–19/19–20 labels, exact coordinates/order/coverage, 19 pair links, reorder/removal updated links PASS
+External Yandex popup opened: https://yandex.co.il/maps/

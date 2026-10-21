@@ -40,7 +40,7 @@ import { VideoReel } from './video-reel';
 import { VideoAttribution } from './video-attribution';
 import { TripStopsStrip } from './trip-stops-strip';
 import { useCardVideoPreviews } from './card-video-previews';
-import { TripPanel } from './trip-panel';
+import { useRouter } from 'next/navigation';
 import { ImportDialog, type DraftLocation } from './import-dialog';
 const ExplorerMap = dynamic(() => import('./explorer-map'), {
   ssr: false,
@@ -119,7 +119,11 @@ export default function Explorer() {
   const [category, setCategory] = useState('Все места');
   const [query, setQuery] = useState('');
   const [savedOnly, setSavedOnly] = useState(false);
-  const [tripOpen, setTripOpen] = useState(false);
+  const router = useRouter();
+  const tripOpen = false;
+  const setTripOpen = (open: boolean) => {
+    if (open) router.push('/trip');
+  };
   const [importOpen, setImportOpen] = useState(false);
   const [pickMode, setPickMode] = useState(false);
   const [location, setLocation] = useState<DraftLocation | null>(null);
@@ -191,6 +195,19 @@ export default function Explorer() {
   useEffect(() => {
     if (hydrated) syncLocations(allPlaces);
   }, [allPlaces, hydrated, loading, regionId, syncLocations]);
+  useEffect(() => {
+    if (!hydrated || loading) return;
+    const id = new URLSearchParams(window.location.search).get('place');
+    const place = allPlaces.find((p) => p.id === id);
+    if (place) {
+      const destination = regions.find((r) => r.name === place.region);
+      if (destination) setRegion(destination.id);
+      setTripLocation(placeLocationId(place));
+      setActive(place);
+      setMobileView('map');
+      window.history.replaceState(null, '', '/');
+    }
+  }, [hydrated, loading, allPlaces, setRegion, setTripLocation]);
   const savedGroups = locationGroups(allPlaces.filter((p) => hydrated && saved.includes(p.id)));
   function chooseLocation(id: string) {
     const group = locationGroups(allPlaces).find((g) => g.id === id);
@@ -299,9 +316,10 @@ export default function Explorer() {
       allPlaces.find((p) => p.id === id) ||
       (reelReturn.current.place?.id === id ? reelReturn.current.place : null);
     if (place) {
+      // Preserve metadata from transient video/map results for direct /trip visits.
+      useExplorer.getState().addPlace(place);
       const destination = regions.find((r) => r.name === place.region);
       if (destination) setRegion(destination.id);
-      setTripLocation(placeLocationId(place));
     }
     const currentTrip = useExplorer.getState().trip;
     if (!currentTrip.includes(id) && currentTrip.length >= 20) {
@@ -826,18 +844,7 @@ export default function Explorer() {
               </div>
             </div>
           )}
-          {!active && (
-            <div className="map-nudge">
-              <span className="nudge-icon">
-                <Play size={15} fill="currentColor" />
-              </span>
-              <div>
-                <b>Увидеть. Влюбиться. Отправиться.</b>
-                <span>Нажмите на карточку и начните свою историю</span>
-              </div>
-              <ArrowUpRight size={18} />
-            </div>
-          )}
+
           {pickMode && (
             <Button
               className="cancel-pick"
@@ -851,18 +858,6 @@ export default function Explorer() {
             </Button>
           )}
         </section>
-        {tripOpen && (
-          <TripPanel
-            places={allPlaces}
-            onClose={() => setTripOpen(false)}
-            route={route}
-            onRoute={setRoute}
-            onSelect={(p) => {
-              selectPlace(p);
-              setTripOpen(false);
-            }}
-          />
-        )}
       </main>
       {!tripOpen && !reelId && !pickMode && !importOpen && (
         <TripStopsStrip

@@ -1,0 +1,55 @@
+import {chromium,devices,expect} from '@playwright/test';
+import {writeFile} from 'node:fs/promises';
+import {places} from '../../../lib/data';
+import {locationId} from '../../../lib/locations';
+async function main(){
+const out='backlog/tasks/trip-multi-select-fix/';const log:string[]=[];
+const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});
+try{for(const mobile of [false,true]){
+const context=await browser.newContext(mobile?devices['iPhone 13']:{viewport:{width:1440,height:1000}});const page=await context.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+await page.goto('http://localhost:3000');
+async function feed(){if(mobile&&await page.locator('.mobile-tools').getByRole('button',{name:'Лента',exact:true}).isVisible())await page.locator('.mobile-tools').getByRole('button',{name:'Лента',exact:true}).click();}
+await feed();
+for(const name of ['Суйсари на острове','Река Сюскюянйоки','Река Иййоки'])await page.getByRole('button',{name:'Добавить в поездку '+name,exact:true}).click();
+await expect(page.getByRole('region',{name:'Выбранные остановки'}).getByRole('listitem')).toHaveCount(3);
+await page.getByRole('button',{name:'Открыть Суйсари на острове',exact:true}).click();
+const reel=page.getByRole('dialog',{name:'Видео путешествий'});
+await expect(reel.getByRole('button',{name:'Убрать из поездки',exact:true})).toBeVisible();
+await reel.getByRole('button',{name:'Убрать из поездки',exact:true}).click();
+await expect(reel.getByRole('button',{name:'Добавить в поездку',exact:true})).toBeVisible();
+await reel.getByRole('button',{name:'Добавить в поездку',exact:true}).click();
+await reel.getByRole('button',{name:'Показать Суйсари на острове на карте',exact:true}).click();
+await expect(page.locator('.preview-actions').getByRole('button',{name:'В поездке',exact:true})).toBeVisible();
+await page.locator('.preview-actions').getByRole('button',{name:'В поездке',exact:true}).click();
+await expect(page.locator('.preview-actions').getByRole('button',{name:'В поездку',exact:true})).toBeVisible();
+await page.locator('.preview-actions').getByRole('button',{name:'В поездку',exact:true}).click();
+await page.getByRole('button',{name:'Закрыть место',exact:true}).click();await feed();
+for(const name of ['Суйсари на острове','Река Сюскюянйоки','Река Иййоки'])await expect(page.getByRole('button',{name:'Убрать из поездки '+name,exact:true})).toBeVisible();
+await page.screenshot({path:out+`qa-selected-${mobile?'mobile':'desktop'}.png`});
+await page.goto('http://localhost:3000/?place=syskyanjoki');
+await expect(page.locator('.preview-actions').getByRole('button',{name:'В поездке',exact:true})).toBeVisible();
+await page.getByRole('button',{name:'Закрыть место',exact:true}).click();await feed();
+await page.getByRole('region',{name:'Выбранные остановки'}).getByRole('button',{name:'Собрать поездку',exact:true}).click();
+await expect(page.locator('.stops > li')).toHaveCount(3);
+await page.getByLabel('Предложить порядок по близости').uncheck();
+await page.getByRole('button',{name:'Общественный транспорт',exact:true}).click();
+await page.getByRole('button',{name:'Собрать маршрут',exact:true}).click();
+await expect(page.locator('.route-summary')).toContainText('Предварительный план');
+await expect(page.locator('.timeline-transfer')).toHaveCount(2);
+await expect(page.locator('.navigation-link')).toHaveAttribute('href',/rtt=mt/);
+await page.screenshot({path:out+`qa-route-${mobile?'mobile':'desktop'}.png`,fullPage:true});
+await page.locator('.timeline-transfer').first().scrollIntoViewIfNeeded();await page.screenshot({path:out+`qa-route-detail-${mobile?'mobile':'desktop'}.png`});
+expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);expect(errors).toEqual([]);
+log.push(`${mobile?'Mobile iPhone13 emulation':'Desktop1440x1000'}: unseeded 3-city Karelia clicks, reel remove/readd, map card remove/readd, feed selected, cross-city place URL, direct /trip all3, actual transit fallback all legs, no errors/overflow PASS`);await context.close();
+}
+const a=places.find(p=>p.id==='suisaari')!,b=places.find(p=>p.id==='syskyanjoki')!;
+const points=Array.from({length:22},(_,i)=>({...a,id:'qa-migrate-'+i,name:'QA миграция '+i}));
+const ctx=await browser.newContext();const p=await ctx.newPage();
+await p.addInitScript(({points,aKey,bKey})=>{if(!localStorage.getItem('weekend-explorer-v1'))localStorage.setItem('weekend-explorer-v1',JSON.stringify({version:0,state:{regionId:'karelia',locationsMigrated:true,locationId:aKey,trip:points.slice(0,10).map(p=>p.id),locationTrips:{[aKey]:[...points.slice(0,10).map(p=>p.id),'deleted-id'],[bKey]:[...points.slice(10).map(p=>p.id),'unknown-id']},regionTrips:{karelia:['deleted-id']},customPlaces:points,saved:[],transportMode:'car',daySettings:{[aKey]:{start:'10:00',end:'20:00',visits:{}}}}}));},{points,aKey:locationId(a),bKey:locationId(b)});
+await p.goto('http://localhost:3000/trip');await expect(p.locator('.stops > li')).toHaveCount(22);await expect(p.getByRole('button',{name:'Собрать маршрут',exact:true})).toBeDisabled();await expect(p.getByText(/В сохранённых поездках больше 20 мест/)).toBeVisible();await expect(p.getByLabel('Начало дня',{exact:true})).toHaveValue('10:00');
+let state=await p.evaluate(()=>JSON.parse(localStorage.getItem('weekend-explorer-v1')!).state);expect(state.trip).toContain('unknown-id');expect(state.trip).not.toContain('deleted-id');expect(state.daySettings[locationId(a)].start).toBe('10:00');
+await p.getByRole('button',{name:'Удалить QA миграция 0',exact:true}).click();await p.reload();await expect(p.locator('.stops > li')).toHaveCount(21);state=await p.evaluate(()=>JSON.parse(localStorage.getItem('weekend-explorer-v1')!).state);expect(state.trip).not.toContain('qa-migrate-0');console.log('Unknown metadata after edit/reload',JSON.stringify({pending:state.unassignedStops,trip:state.trip}));expect(state.unassignedStops).toContain('unknown-id');expect(state.regionTripsMigrated).toBe(true);
+log.push('Browser legacy migration 22 known + unknown: no truncation, overlimit build blocked, settings migrated/original retained, stale deleted ID absent, remove/reload idempotent, unknown ID retained PASS');await ctx.close();
+await writeFile(out+'qa-extra.log',log.join('\n'));console.log(log.join('\n'));
+}finally{await browser.close();}}
+main().catch(e=>{console.error(e);process.exitCode=1});

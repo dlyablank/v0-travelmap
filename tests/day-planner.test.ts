@@ -38,6 +38,7 @@ afterEach(() =>
     regionTrips: {},
     regionLocations: {},
     locationsMigrated: false,
+    regionTripsMigrated: false,
     unassignedStops: [],
     daySettings: {},
   }),
@@ -51,16 +52,16 @@ describe('one-day plans', () => {
     useExplorer.getState().syncLocations([a, late]);
     expect(useExplorer.getState().unassignedStops).toEqual([]);
     useExplorer.getState().setLocation(locationId(late));
-    expect(useExplorer.getState().trip).toEqual(['late']);
+    expect(useExplorer.getState().trip).toEqual([a.id, 'late']);
   });
-  it('includes travel and custom visits in the timeline and flags an overloaded day', () => {
+  it('ignores legacy custom visits and uses place estimates in the timeline', () => {
     const plan = dayPlan([a, b], road, { start: '09:00', end: '11:00', visits: { a: 90 } });
     expect(plan.entries.map((e) => [e.arrival, e.departure])).toEqual([
-      [540, 630],
-      [640, 700],
+      [540, 600],
+      [610, 670],
     ]);
-    expect(plan.finish).toBe(700);
-    expect(plan.overflow).toBe(40);
+    expect(plan.finish).toBe(670);
+    expect(plan.overflow).toBe(10);
     expect(plan.travel).toBe(10);
   });
   it('does not invent arrival times when road duration is unavailable', () => {
@@ -74,27 +75,31 @@ describe('one-day plans', () => {
     expect(plan.finish).toBeNull();
     expect(plan.complete).toBe(false);
   });
-  it('migrates mixed old trips into locations and retains edits across switches', () => {
+  it('keeps different cities in one regional trip across location switches', () => {
     const other = place('other', 'Озёры');
     useExplorer.setState({ regionId: 'kolomna', trip: [a.id, other.id], regionTrips: {} });
     useExplorer.getState().syncLocations([a, b, other]);
-    expect(useExplorer.getState().trip).toEqual([a.id]);
+    expect(useExplorer.getState().trip).toEqual([a.id, other.id]);
     useExplorer.getState().toggleTrip(b.id);
     useExplorer.getState().setLocation(locationId(other));
-    expect(useExplorer.getState().trip).toEqual([other.id]);
+    expect(useExplorer.getState().trip).toEqual([a.id, other.id, b.id]);
     useExplorer.getState().setLocation(locationId(a));
-    expect(useExplorer.getState().trip).toEqual([a.id, b.id]);
+    expect(useExplorer.getState().trip).toEqual([a.id, other.id, b.id]);
     useExplorer.getState().toggleTrip(a.id);
     useExplorer.getState().syncLocations([a, b, other]);
-    expect(useExplorer.getState().trip).toEqual([b.id]);
+    expect(useExplorer.getState().trip).toEqual([other.id, b.id]);
   });
-  it('keeps the daily settings separate for each location', () => {
+  it('keeps daily settings by region while city browsing does not replace them', () => {
+    useExplorer.getState().setRegion('kolomna');
     useExplorer.getState().setLocation(locationId(a));
     useExplorer.getState().setDaySettings({ start: '10:00' });
     const elsewhere = locationId(place('c', 'Озёры'));
     useExplorer.getState().setLocation(elsewhere);
+    expect(useExplorer.getState().daySettings.kolomna.start).toBe('10:00');
+    useExplorer.getState().setRegion('karelia');
     useExplorer.getState().setDaySettings({ start: '08:00' });
-    expect(useExplorer.getState().daySettings[locationId(a)].start).toBe('10:00');
+    expect(useExplorer.getState().daySettings.kolomna.start).toBe('10:00');
+    expect(useExplorer.getState().daySettings.karelia.start).toBe('08:00');
   });
   it('shortlists at most three videos along the route in the same location', () => {
     const candidates = [
@@ -103,7 +108,7 @@ describe('one-day plans', () => {
       place('e', 'Коломна', 38.76),
       place('f', 'Коломна', 38.762),
       place('remote', 'Коломна', 39.8),
-      place('other', 'Озёры', 38.756),
+      { ...place('other', 'Озёры', 38.756), region: 'Карелия' },
     ];
     const result = recommendationCandidates([a, b], [a, b, ...candidates], road, 'car');
     expect(result).toHaveLength(3);

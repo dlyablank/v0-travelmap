@@ -1,0 +1,8 @@
+Independent browser: 18 passed (1.4m), desktop + Chromium iPhone13 emulation.
+Independent unit/API: 47 passed, 7 files.
+Own Chrome desktop/mobile unseeded selection/reel/map card/deep link/live transit route: completed before migration failure. Screenshots qa-selected/qa-route/qa-route-detail.
+Migration first check: 22 visible stops; unknown-id retained; stale deleted-id absent; build disabled; day start10:00 retained.
+After deleting known qa-migrate-0 and reload:
+Unknown metadata after edit/reload {"pending":[],"trip":["qa-migrate-1","qa-migrate-2","qa-migrate-3","qa-migrate-4","qa-migrate-5","qa-migrate-6","qa-migrate-7","qa-migrate-8","qa-migrate-9","qa-migrate-10","qa-migrate-11","qa-migrate-12","qa-migrate-13","qa-migrate-14","qa-migrate-15","qa-migrate-16","qa-migrate-17","qa-migrate-18","qa-migrate-19","qa-migrate-20","qa-migrate-21"]}
+Assertion failure: expect(state.unassignedStops).toContain('unknown-id'); received []
+Previous run also confirmed unknown-id absent from state.trip. Failure reproduced twice in Chrome.

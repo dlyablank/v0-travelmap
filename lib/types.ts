@@ -37,14 +37,19 @@ export type Place = {
   };
   visitMinutes: number;
 };
+export type TransportMode = 'car' | 'walk' | 'transit';
 export type RouteResult = {
   stopIds?: string[];
-  mode?: 'car' | 'walk';
+  mode?: 'car' | 'walk' | 'transit';
   locationId?: string;
   coordinates: [number, number][];
   distance: number;
   duration: number | null;
-  legs: { distance: number; duration: number | null }[];
+  legs: {
+    distance: number;
+    duration: number | null;
+    instructions?: { text: string; distance: number }[];
+  }[];
   source: 'osrm' | 'straight';
   message?: string;
 };

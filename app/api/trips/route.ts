@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 const input = z.object({
   title: z.string().min(1).max(100),
   durationDays: z.number().int().min(1).max(2),
-  transportMode: z.enum(['car', 'walk']),
+  transportMode: z.enum(['car', 'walk', 'transit']),
   stops: z.array(z.string().max(100)).min(1).max(20),
 });
 export async function POST(req: Request) {

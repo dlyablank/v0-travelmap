@@ -1,8 +1,9 @@
 'use client';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import * as D from '@radix-ui/react-dialog';
+import { yandexRoute, yandexRouteParts } from '@/lib/yandex-route';
 import {
-  X,
+  ArrowLeft,
+  Bus,
   ArrowUp,
   ArrowDown,
   Route,
@@ -21,7 +22,6 @@ import {
 import type { Place, RouteResult } from '@/lib/types';
 import { useExplorer } from '@/lib/store';
 import { regions, getRegion } from '@/lib/regions';
-import { locationGroups, locationId as placeLocationId } from '@/lib/locations';
 import { dayPlan, defaultDay, clockLabel } from '@/lib/day-plan';
 import { optimizeStops } from '@/lib/routing';
 import { distanceLabel, timeLabel } from '@/lib/utils';
@@ -48,23 +48,20 @@ export function TripPanel({
     reorder,
     regionId,
     setRegion,
-    locationId,
-    setLocation,
     transportMode: mode,
     setMode,
     saved,
     daySettings,
     setDaySettings,
   } = useExplorer();
-  const groups = useMemo(() => locationGroups(places), [places]);
-  const location = groups.find((g) => g.id === locationId);
   const region = getRegion(regionId);
+  const locationId = regionId;
   const stops = useMemo(
     () =>
       trip
         .map((id) => places.find((p) => p.id === id))
-        .filter((p): p is Place => !!p && placeLocationId(p) === locationId),
-    [trip, places, locationId],
+        .filter((p): p is Place => !!p && p.region === region.name),
+    [trip, places, region.name],
   );
   const settings = daySettings[locationId] || defaultDay;
   const signature = `${locationId}:${mode}:${stops.map((p) => p.id).join(',')}`;
@@ -80,14 +77,13 @@ export function TripPanel({
   const [feedback, setFeedback] = useState('');
   const [optimize, setOptimize] = useState(true);
   const [error, setError] = useState('');
-  const opener = useRef(document.activeElement as HTMLElement | null);
   const pending = useRef<AbortController | null>(null);
   const requestKey = useRef('');
   const auto = useRef(false);
   useEffect(() => () => pending.current?.abort(), []);
   const build = useCallback(
     async (shouldOptimize = false) => {
-      if (stops.length < 2) {
+      if (stops.length < 2 || trip.length > 20 || plan.budget <= 0) {
         onRoute(null);
         return;
       }
@@ -100,7 +96,12 @@ export function TripPanel({
       setBusy(true);
       setError('');
       onRoute(null);
-      if (shouldOptimize) reorder(ordered.map((p) => p.id));
+      if (shouldOptimize)
+        reorder(
+          ordered.map((p) => p.id),
+          trip.filter((id) => !stops.some((p) => p.id === id)),
+        );
+      const expectedTrip = useExplorer.getState().trip.join(',');
       try {
         const response = await fetch('/api/route', {
           method: 'POST',
@@ -116,19 +117,25 @@ export function TripPanel({
         const state = useExplorer.getState();
         if (
           !controller.signal.aborted &&
-          state.locationId === locationId &&
+          state.regionId === regionId &&
           state.transportMode === mode &&
-          state.trip.join(',') === ordered.map((p) => p.id).join(',')
+          state.trip.join(',') === expectedTrip
         )
           onRoute({ ...data, stopIds: ordered.map((p) => p.id), mode, locationId });
       } catch (e) {
-        if (!controller.signal.aborted)
+        const state = useExplorer.getState();
+        if (
+          !controller.signal.aborted &&
+          state.regionId === regionId &&
+          state.transportMode === mode &&
+          state.trip.join(',') === expectedTrip
+        )
           setError(e instanceof Error ? e.message : 'Маршрут не построен. Повторите попытку.');
       } finally {
         if (pending.current === controller) setBusy(false);
       }
     },
-    [stops, mode, locationId, onRoute, reorder],
+    [stops, mode, locationId, regionId, trip, onRoute, reorder, plan.budget],
   );
   useEffect(() => {
     if (!auto.current || requestKey.current === signature) return;
@@ -141,7 +148,10 @@ export function TripPanel({
     pending.current?.abort();
     onRoute(null);
     setOptimize(false);
-    reorder(ids);
+    reorder(
+      ids,
+      trip.filter((id) => !stops.some((p) => p.id === id)),
+    );
   }
   function move(index: number, delta: number) {
     const ids = stops.map((p) => p.id);
@@ -154,9 +164,7 @@ export function TripPanel({
     auto.current = false;
     setBusy(false);
     setError('');
-    const destination = regions.find((r) => r.name === groups.find((g) => g.id === id)?.region);
-    if (destination) setRegion(destination.id);
-    setLocation(id);
+    setRegion(id);
   }
   async function save() {
     setSaving(true);
@@ -165,7 +173,7 @@ export function TripPanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: `${location?.name || region.name} · один день`,
+          title: `${region.name} · один день`,
           durationDays: 1,
           transportMode: mode,
           stops: stops.map((p) => p.id),
@@ -188,11 +196,12 @@ export function TripPanel({
       [
         JSON.stringify(
           {
-            title: location?.name,
+            title: region.name,
+            regionId,
             locationId,
             durationDays: 1,
             transportMode: mode,
-            settings,
+            settings: { start: settings.start, end: settings.end, visits: {} },
             stops,
             route: activeRoute,
             schedule: plan.entries,
@@ -211,394 +220,397 @@ export function TripPanel({
     URL.revokeObjectURL(url);
   }
   const savedHere = places.filter(
-    (p) => saved.includes(p.id) && placeLocationId(p) === locationId && !trip.includes(p.id),
+    (p) => saved.includes(p.id) && p.region === region.name && !trip.includes(p.id),
   );
   return (
-    <D.Root
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <D.Portal>
-        <D.Overlay className="trip-backdrop" />
-        <D.Content
-          className="trip-panel"
-          onEscapeKeyDown={(event) => event.stopPropagation()}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            const target = opener.current?.isConnected
-              ? opener.current
-              : document.querySelector<HTMLElement>(
-                  matchMedia('(max-width: 700px)').matches ? '.mobile-trip' : '.trip-button',
-                );
-            target?.focus({ preventScroll: true });
+    <main className="trip-panel trip-page" aria-label="Создание поездки">
+      <div className="panel-header">
+        <div>
+          <div className="dialog-eyebrow">{region.name.toUpperCase()} · ОДИН ХОРОШИЙ ДЕНЬ</div>
+          <h2>
+            Моя поездка<span>{stops.length}</span>
+          </h2>
+        </div>
+        <button className="icon-button" aria-label="Вернуться к местам" onClick={onClose}>
+          <ArrowLeft size={22} />
+        </button>
+      </div>
+      <p className="reel-sr-only">
+        Выберите регион и остановки. Места разных городов региона входят в одну поездку.
+      </p>
+      <div className="trip-content">
+        {trip.some((id) => !places.some((p) => p.id === id)) && (
+          <p className="route-warning" role="status">
+            Некоторые сохранённые места сейчас недоступны. Их точки сохранены в браузере и появятся
+            после загрузки данных.
+          </p>
+        )}
+        <Button variant="outline" onClick={onClose}>
+          Выбрать места в каталоге <ArrowUpRight size={17} />
+        </Button>
+        <label className="trip-location-field">
+          <MapPin size={18} />
+          <span>
+            Регион поездки
+            <select
+              aria-label="Регион поездки"
+              value={locationId}
+              onChange={(event) => chooseLocation(event.target.value)}
+            >
+              {regions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </span>
+        </label>
+        <TripCover stops={stops} days={1} mode={mode} route={activeRoute} />
+        <div className="day-time-fields">
+          <label>
+            Начало дня
+            <input
+              aria-label="Начало дня"
+              type="time"
+              value={settings.start}
+              onChange={(e) => {
+                if (e.target.value) setDaySettings({ start: e.target.value });
+              }}
+            />
+          </label>
+          <label>
+            Закончить к
+            <input
+              aria-label="Окончание дня"
+              type="time"
+              value={settings.end}
+              onChange={(e) => {
+                if (e.target.value) setDaySettings({ end: e.target.value });
+              }}
+            />
+          </label>
+        </div>
+        {plan.budget <= 0 && (
+          <p className="form-error" role="alert">
+            Окончание дня должно быть позже начала.
+          </p>
+        )}
+        <div className="transport-options">
+          <button
+            aria-pressed={mode === 'car'}
+            className={mode === 'car' ? 'selected' : ''}
+            onClick={() => {
+              onRoute(null);
+              setMode('car');
+            }}
+          >
+            <Car size={18} />
+            На автомобиле
+          </button>
+          <button
+            aria-pressed={mode === 'walk'}
+            className={mode === 'walk' ? 'selected' : ''}
+            onClick={() => {
+              onRoute(null);
+              setMode('walk');
+            }}
+          >
+            <Footprints size={18} />
+            Пешком
+          </button>
+        </div>
+        <button
+          className={`transit-option ${mode === 'transit' ? 'selected' : ''}`}
+          aria-pressed={mode === 'transit'}
+          onClick={() => {
+            onRoute(null);
+            setMode('transit');
           }}
         >
-          <div className="panel-header">
-            <div>
-              <div className="dialog-eyebrow">ОДНА ЛОКАЦИЯ · ОДИН ХОРОШИЙ ДЕНЬ</div>
-              <D.Title asChild>
-                <h2>
-                  Моя поездка<span>{stops.length}</span>
-                </h2>
-              </D.Title>
+          <Bus size={18} /> Общественный транспорт
+        </button>
+        {!!savedHere.length && (
+          <section className="trip-saved" aria-label="Сохранённое в этом регионе">
+            <div className="day-section-title">
+              <Bookmark size={17} />
+              <h3>Из ваших сохранённых</h3>
             </div>
-            <D.Close className="icon-button" aria-label="Закрыть поездку">
-              <X size={22} />
-            </D.Close>
+            {savedHere.map((p) => (
+              <button
+                key={p.id}
+                disabled={stops.length >= 20}
+                onClick={() => {
+                  onRoute(null);
+                  toggleTrip(p.id);
+                }}
+                aria-label={`Добавить сохранённое: ${p.name}`}
+              >
+                <span>{p.name}</span>
+                <Plus size={18} />
+              </button>
+            ))}
+          </section>
+        )}
+        {!stops.length ? (
+          <div className="empty-state">
+            <Route size={36} />
+            <h3>Начните с любимого места</h3>
+            <p>
+              Добавляйте остановки из разных городов региона. Сохранённое из других регионов
+              останется в коллекции.
+            </p>
+            <Button variant="outline" onClick={onClose}>
+              Исследовать регион
+              <ArrowUpRight size={17} />
+            </Button>
           </div>
-          <D.Description className="reel-sr-only">
-            Выберите локацию, остановки и время посещения. Маршрут и рекомендации останутся внутри
-            выбранной локации.
-          </D.Description>
-          <div className="trip-content">
-            <label className="trip-location-field">
-              <MapPin size={18} />
-              <span>
-                Локация поездки
-                <select
-                  aria-label="Локация поездки"
-                  value={locationId}
-                  onChange={(event) => chooseLocation(event.target.value)}
-                >
-                  {regions.map((r) => (
-                    <optgroup key={r.id} label={r.name}>
-                      {groups
-                        .filter((g) => g.region === r.name)
-                        .map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.name}
-                          </option>
-                        ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </span>
+        ) : (
+          <>
+            <div className="day-section-title">
+              <Clock size={17} />
+              <h3>{activeRoute ? 'Итоговый маршрут' : 'Остановки поездки'}</h3>
+            </div>
+            <p className="trip-hint">
+              Первая остановка — точка старта. Порядок можно менять стрелками. Время на месте —
+              ориентировочная редакционная оценка, а не измеренная статистика посещений.
+            </p>
+            <p className="trip-hint">
+              Старт: {stops[0]?.name} · Финиш: {stops.at(-1)?.name}
+            </p>
+            <ol className="stops day-timeline" aria-label="План дня">
+              {plan.entries.map((entry, index) => (
+                <li key={entry.place.id}>
+                  {index > 0 && (
+                    <div className="timeline-transfer">
+                      {mode === 'car' ? (
+                        <Car size={14} />
+                      ) : mode === 'transit' ? (
+                        <Bus size={14} />
+                      ) : (
+                        <Footprints size={14} />
+                      )}
+                      <div>
+                        <strong>
+                          {mode === 'car'
+                            ? 'На автомобиле'
+                            : mode === 'transit'
+                              ? 'Общественным транспортом'
+                              : 'Пешком'}
+                          : {stops[index - 1].name} → {entry.place.name}
+                        </strong>
+                        <br />
+                        {entry.leg
+                          ? `${distanceLabel(entry.leg.distance)} · ${entry.leg.duration != null ? timeLabel(entry.leg.duration) : 'время не рассчитано'}`
+                          : 'Переезд будет рассчитан'}
+                        {activeRoute?.source === 'straight' && ' · по прямой'}
+                        {!!entry.leg?.instructions?.length && (
+                          <ol className="transfer-instructions">
+                            {entry.leg.instructions.map((step, i) => (
+                              <li key={i}>
+                                {step.text}
+                                {step.distance > 0 ? ' · ' + distanceLabel(step.distance) : ''}
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                        {activeRoute && (
+                          <a
+                            className="transfer-link"
+                            href={yandexRoute([stops[index - 1], entry.place], mode)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {mode === 'transit'
+                              ? 'Посмотреть транспорт и пересадки в Яндекс Картах'
+                              : 'Уточнить путь в Яндекс Картах'}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div className="timeline-stop">
+                    <div className="stop-number">{index + 1}</div>
+                    <button
+                      className="stop-image"
+                      onClick={() => onSelect(entry.place)}
+                      aria-label={`На карте: ${entry.place.name}`}
+                    >
+                      <PlaceImage place={entry.place} />
+                    </button>
+                    <div className="stop-info">
+                      <span className="stop-time">
+                        {entry.arrival === null
+                          ? 'Время после расчёта переезда'
+                          : `${clockLabel(entry.arrival)} — ${clockLabel(entry.departure)}`}
+                      </span>
+                      <button onClick={() => onSelect(entry.place)}>{entry.place.name}</button>
+                      <p className="visit-duration">
+                        На месте: {timeLabel(entry.visit * 60)} · ориентировочно
+                      </p>
+                      <p className="stop-description">{entry.place.description}</p>
+                    </div>
+                    <div className="stop-actions">
+                      <button
+                        disabled={index === 0}
+                        aria-label={`Поднять ${entry.place.name}`}
+                        onClick={() => move(index, -1)}
+                      >
+                        <ArrowUp size={17} />
+                      </button>
+                      <button
+                        disabled={index === stops.length - 1}
+                        aria-label={`Опустить ${entry.place.name}`}
+                        onClick={() => move(index, 1)}
+                      >
+                        <ArrowDown size={17} />
+                      </button>
+                      <button
+                        aria-label={`Удалить ${entry.place.name}`}
+                        onClick={() =>
+                          changeTrip(stops.filter((p) => p.id !== entry.place.id).map((p) => p.id))
+                        }
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={optimize}
+                onChange={(e) => setOptimize(e.target.checked)}
+              />
+              Предложить порядок по близости
             </label>
-            <TripCover stops={stops} days={1} mode={mode} route={activeRoute} />
-            <div className="day-time-fields">
-              <label>
-                Начало дня
-                <input
-                  aria-label="Начало дня"
-                  type="time"
-                  value={settings.start}
-                  onChange={(e) => {
-                    if (e.target.value) setDaySettings({ start: e.target.value });
-                  }}
-                />
-              </label>
-              <label>
-                Закончить к
-                <input
-                  aria-label="Окончание дня"
-                  type="time"
-                  value={settings.end}
-                  onChange={(e) => {
-                    if (e.target.value) setDaySettings({ end: e.target.value });
-                  }}
-                />
-              </label>
-            </div>
-            {plan.budget <= 0 && (
-              <p className="form-error" role="alert">
-                Окончание дня должно быть позже начала.
-              </p>
-            )}
-            <div className="transport-options">
-              <button
-                aria-pressed={mode === 'car'}
-                className={mode === 'car' ? 'selected' : ''}
-                onClick={() => {
-                  onRoute(null);
-                  setMode('car');
-                }}
-              >
-                <Car size={18} />
-                На автомобиле
-              </button>
-              <button
-                aria-pressed={mode === 'walk'}
-                className={mode === 'walk' ? 'selected' : ''}
-                onClick={() => {
-                  onRoute(null);
-                  setMode('walk');
-                }}
-              >
-                <Footprints size={18} />
-                Пешком
-              </button>
-            </div>
-            {!!savedHere.length && (
-              <section className="trip-saved" aria-label="Сохранённое в этой локации">
-                <div className="day-section-title">
-                  <Bookmark size={17} />
-                  <h3>Из ваших сохранённых</h3>
+            <p className="small-note">
+              Первая остановка остаётся стартом. Предложенный порядок можно изменить.
+            </p>
+            {activeRoute && (
+              <section className="route-summary" aria-label="Итоги дня">
+                <div className="summary-title">
+                  {activeRoute.source === 'osrm' ? 'Маршрут собран' : 'Предварительный план'}
                 </div>
-                {savedHere.map((p) => (
-                  <button
-                    key={p.id}
-                    disabled={stops.length >= 20}
-                    onClick={() => {
-                      onRoute(null);
-                      toggleTrip(p.id);
-                    }}
-                    aria-label={`Добавить сохранённое: ${p.name}`}
-                  >
-                    <span>{p.name}</span>
-                    <Plus size={18} />
-                  </button>
-                ))}
+                <div className="route-stats">
+                  <span>
+                    <MapPin size={15} />
+                    <b>{distanceLabel(activeRoute.distance)}</b>
+                    <small>{activeRoute.source === 'straight' ? 'по прямой' : 'по дорогам'}</small>
+                  </span>
+                  <span>
+                    <Clock size={15} />
+                    <b>{plan.travel !== null ? timeLabel(plan.travel * 60) : 'Не рассчитано'}</b>
+                    <small>в пути</small>
+                  </span>
+                </div>
+                <p>{timeLabel(plan.visits * 60)} на остановки · один день.</p>
+                {plan.complete && (
+                  <p className="day-finish">
+                    Финиш около <strong>{clockLabel(plan.finish)}</strong> · всего{' '}
+                    {timeLabel((plan.visits + (plan.travel || 0)) * 60)}
+                  </p>
+                )}
+                {plan.overflow > 0 && (
+                  <p className="day-overflow" role="status">
+                    План длиннее вашего дня минимум на {timeLabel(plan.overflow * 60)}. Уберите
+                    остановку или измените границы дня.
+                  </p>
+                )}
+                {!plan.complete && (
+                  <p>
+                    Расписание после первой остановки появится, когда будет известно время
+                    переездов.
+                  </p>
+                )}
+                {activeRoute.message && <p className="route-warning">{activeRoute.message}</p>}
               </section>
             )}
-            {!stops.length ? (
-              <div className="empty-state">
-                <Route size={36} />
-                <h3>Начните с любимого места</h3>
-                <p>
-                  Добавляйте остановки для этой локации. Сохранённое из других локаций останется в
-                  коллекции.
-                </p>
-                <Button variant="outline" onClick={onClose}>
-                  Исследовать локацию
-                  <ArrowUpRight size={17} />
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="day-section-title">
-                  <Clock size={17} />
-                  <h3>Ваш день по шагам</h3>
-                </div>
-                <p className="trip-hint">
-                  Первая остановка — точка старта. Время на месте можно менять, порядок — двигать
-                  стрелками.
-                </p>
-                <ol className="stops day-timeline" aria-label="План дня">
-                  {plan.entries.map((entry, index) => (
-                    <li key={entry.place.id}>
-                      {index > 0 && (
-                        <div className="timeline-transfer">
-                          {mode === 'car' ? <Car size={14} /> : <Footprints size={14} />}
-                          <span>
-                            {entry.leg
-                              ? `${distanceLabel(entry.leg.distance)} · ${entry.leg.duration != null ? timeLabel(entry.leg.duration) : 'время не рассчитано'}`
-                              : 'Переезд будет рассчитан'}
-                            {activeRoute?.source === 'straight' && ' · по прямой'}
-                          </span>
-                        </div>
-                      )}
-                      <div className="timeline-stop">
-                        <div className="stop-number">{index + 1}</div>
-                        <button
-                          className="stop-image"
-                          onClick={() => onSelect(entry.place)}
-                          aria-label={`На карте: ${entry.place.name}`}
-                        >
-                          <PlaceImage place={entry.place} />
-                        </button>
-                        <div className="stop-info">
-                          <span className="stop-time">
-                            {entry.arrival === null
-                              ? 'Время после расчёта переезда'
-                              : `${clockLabel(entry.arrival)} — ${clockLabel(entry.departure)}`}
-                          </span>
-                          <button onClick={() => onSelect(entry.place)}>{entry.place.name}</button>
-                          <label className="visit-duration">
-                            На месте
-                            <select
-                              aria-label={`Время посещения: ${entry.place.name}`}
-                              value={entry.visit}
-                              onChange={(e) =>
-                                setDaySettings({
-                                  visits: {
-                                    ...settings.visits,
-                                    [entry.place.id]: Number(e.target.value),
-                                  },
-                                })
-                              }
-                            >
-                              {[
-                                ...new Set([
-                                  15,
-                                  30,
-                                  45,
-                                  60,
-                                  90,
-                                  120,
-                                  180,
-                                  240,
-                                  360,
-                                  480,
-                                  entry.visit,
-                                ]),
-                              ]
-                                .sort((a, b) => a - b)
-                                .map((minutes) => (
-                                  <option key={minutes} value={minutes}>
-                                    {timeLabel(minutes * 60)}
-                                  </option>
-                                ))}
-                            </select>
-                          </label>
-                        </div>
-                        <div className="stop-actions">
-                          <button
-                            disabled={index === 0}
-                            aria-label={`Поднять ${entry.place.name}`}
-                            onClick={() => move(index, -1)}
-                          >
-                            <ArrowUp size={17} />
-                          </button>
-                          <button
-                            disabled={index === stops.length - 1}
-                            aria-label={`Опустить ${entry.place.name}`}
-                            onClick={() => move(index, 1)}
-                          >
-                            <ArrowDown size={17} />
-                          </button>
-                          <button
-                            aria-label={`Удалить ${entry.place.name}`}
-                            onClick={() =>
-                              changeTrip(
-                                stops.filter((p) => p.id !== entry.place.id).map((p) => p.id),
-                              )
-                            }
-                          >
-                            <Trash2 size={17} />
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={optimize}
-                    onChange={(e) => setOptimize(e.target.checked)}
-                  />
-                  Предложить порядок по близости
-                </label>
-                <p className="small-note">
-                  Первая остановка остаётся стартом. Предложенный порядок можно изменить.
-                </p>
-                {activeRoute && (
-                  <section className="route-summary" aria-label="Итоги дня">
-                    <div className="summary-title">
-                      {activeRoute.source === 'osrm' ? 'Маршрут собран' : 'Предварительный план'}
-                    </div>
-                    <div className="route-stats">
-                      <span>
-                        <MapPin size={15} />
-                        <b>{distanceLabel(activeRoute.distance)}</b>
-                        <small>
-                          {activeRoute.source === 'straight' ? 'по прямой' : 'по дорогам'}
-                        </small>
-                      </span>
-                      <span>
-                        <Clock size={15} />
-                        <b>
-                          {plan.travel !== null ? timeLabel(plan.travel * 60) : 'Не рассчитано'}
-                        </b>
-                        <small>в пути</small>
-                      </span>
-                    </div>
-                    <p>{timeLabel(plan.visits * 60)} на остановки · один день.</p>
-                    {plan.complete && (
-                      <p className="day-finish">
-                        Финиш около <strong>{clockLabel(plan.finish)}</strong> · всего{' '}
-                        {timeLabel((plan.visits + (plan.travel || 0)) * 60)}
-                      </p>
-                    )}
-                    {plan.overflow > 0 && (
-                      <p className="day-overflow" role="status">
-                        План длиннее вашего дня минимум на {timeLabel(plan.overflow * 60)}.
-                        Сократите посещения или уберите остановку.
-                      </p>
-                    )}
-                    {!plan.complete && (
-                      <p>
-                        Расписание после первой остановки появится, когда будет известно время
-                        переездов.
-                      </p>
-                    )}
-                    {activeRoute.message && <p className="route-warning">{activeRoute.message}</p>}
-                  </section>
-                )}
-                {activeRoute && (
-                  <TripRecommendations
-                    stops={stops}
-                    places={places}
-                    route={activeRoute}
-                    mode={mode}
-                    onAdd={(place, index) => {
-                      const ids = stops.map((p) => p.id);
-                      ids.splice(index, 0, place.id);
-                      changeTrip(ids);
-                    }}
-                  />
-                )}
-                {error && (
-                  <p className="form-error" role="alert">
-                    {error}
-                  </p>
-                )}
-                {feedback && (
-                  <p className="trip-feedback" role="status" aria-live="polite">
-                    {feedback}
-                  </p>
-                )}
-                <div className="trip-extra">
-                  <Button variant="outline" size="sm" onClick={download}>
-                    <Download size={15} />
-                    Скачать план
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={save} disabled={saving}>
-                    {saving ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}
-                    Сохранить на сервере
-                  </Button>
-                </div>
-                {activeRoute && (
-                  <a
-                    className="navigation-link"
-                    href={`https://www.google.com/maps/dir/?api=1&origin=${stops[0].latitude},${stops[0].longitude}&destination=${stops.at(-1)!.latitude},${stops.at(-1)!.longitude}&waypoints=${stops
-                      .slice(1, -1)
-                      .map((p) => `${p.latitude},${p.longitude}`)
-                      .join('|')}&travelmode=${mode === 'car' ? 'driving' : 'walking'}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Открыть навигацию
-                    <ArrowUpRight size={16} />
-                  </a>
-                )}
-              </>
+            {activeRoute && mode !== 'transit' && (
+              <TripRecommendations
+                stops={stops}
+                places={places}
+                route={activeRoute}
+                mode={mode}
+                onAdd={(place, index) => {
+                  const ids = stops.map((p) => p.id);
+                  ids.splice(index, 0, place.id);
+                  changeTrip(ids);
+                }}
+              />
             )}
-          </div>
-          <div className="trip-footer">
-            <Button
-              className="full-width"
-              disabled={stops.length < 2 || busy || plan.budget <= 0}
-              onClick={() => {
-                void build(optimize);
-              }}
-            >
-              {busy ? <LoaderCircle size={18} className="spin" /> : <Route size={18} />}{' '}
-              {busy ? 'Собираем маршрут…' : 'Собрать маршрут'}
-              <ArrowUpRight size={18} />
-            </Button>
-            <small>
-              {stops.length < 2
-                ? 'Добавьте минимум два места в этой локации'
-                : busy
-                  ? 'Учитываем переезды между остановками'
-                  : 'Время посещений приблизительное, старт — с первой точки'}
-            </small>
-          </div>
-        </D.Content>
-      </D.Portal>
-    </D.Root>
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+            {feedback && (
+              <p className="trip-feedback" role="status" aria-live="polite">
+                {feedback}
+              </p>
+            )}
+            <div className="trip-extra">
+              <Button variant="outline" size="sm" onClick={download}>
+                <Download size={15} />
+                Скачать план
+              </Button>
+              <Button variant="outline" size="sm" onClick={save} disabled={saving}>
+                {saving ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}
+                Сохранить на сервере
+              </Button>
+            </div>
+            {activeRoute && stops.length > 10 && (
+              <p className="trip-hint">
+                Яндекс Карты принимают до 10 точек за один раз. Маршрут разделён на последовательные
+                части с общей остановкой на границе. Все места сохранены.
+              </p>
+            )}
+            {activeRoute &&
+              yandexRouteParts(stops, mode).map((href, index, parts) => (
+                <a
+                  key={href}
+                  className="navigation-link"
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Маршрут в Яндекс Картах
+                  {parts.length > 1
+                    ? ` · часть ${index + 1}: остановки ${index * 9 + 1}–${Math.min(index * 9 + 10, stops.length)}`
+                    : ''}
+                  <ArrowUpRight size={16} />
+                </a>
+              ))}
+          </>
+        )}
+      </div>
+      <div className="trip-footer">
+        {trip.length > 20 && (
+          <p className="form-error" role="alert">
+            В сохранённых поездках больше 20 мест. Все точки сохранены. Удалите лишние остановки
+            перед расчётом маршрута.
+          </p>
+        )}
+        <Button
+          className="full-width"
+          disabled={stops.length < 2 || trip.length > 20 || busy || plan.budget <= 0}
+          onClick={() => {
+            void build(optimize);
+          }}
+        >
+          {busy ? <LoaderCircle size={18} className="spin" /> : <Route size={18} />}{' '}
+          {busy ? 'Собираем маршрут…' : 'Собрать маршрут'}
+          <ArrowUpRight size={18} />
+        </Button>
+        <small>
+          {stops.length < 2
+            ? 'Добавьте минимум два места в этом регионе'
+            : busy
+              ? 'Учитываем переезды между остановками'
+              : 'Время посещений приблизительное, старт — с первой точки'}
+        </small>
+      </div>
+    </main>
   );
 }

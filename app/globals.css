@@ -4097,3 +4097,116 @@ h1 > span:not(.heading-spark) {
   font-size: 9px;
   line-height: 11px;
 }
+/* A regular document page, sharing the trip components and visual language. */
+.trip-panel.trip-page {
+  position: relative;
+  inset: auto;
+  width: min(100% - 40px, 960px);
+  height: auto;
+  max-height: none;
+  margin: 28px auto;
+  border-radius: 22px;
+  overflow: visible;
+  animation: none;
+  z-index: 1;
+}
+.trip-page .trip-content {
+  overflow: visible;
+}
+.trip-page .panel-header h2 {
+  font-size: 32px;
+}
+.trip-page .panel-header h2 span {
+  font-size: 16px;
+  margin-left: 12px;
+}
+.trip-page .trip-content > .button {
+  margin-bottom: 18px;
+}
+.trip-page .transport-options > button,
+.transit-option {
+  min-height: 48px;
+  font-size: 14px;
+}
+.transit-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  border: 1px solid #dce3d3;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+.transit-option.selected {
+  color: #cf6549;
+  background: #fff0e6;
+  border-color: #eabda8;
+}
+.trip-page .stop-info {
+  min-width: 0;
+}
+.trip-page .stop-description {
+  line-height: 1.65;
+  color: #65705e;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.trip-page .stop-info > button {
+  text-align: left;
+}
+.trip-page .timeline-stop {
+  align-items: flex-start;
+}
+.trip-page .timeline-transfer {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.trip-page .timeline-transfer > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.transfer-link {
+  display: block;
+  text-decoration: underline;
+  padding: 10px 0;
+}
+.transfer-instructions {
+  padding-left: 20px;
+  margin-top: 8px;
+}
+.trip-page .navigation-link {
+  font-size: 14px;
+  min-height: 48px;
+}
+.trip-page .trip-footer {
+  border-radius: 0 0 22px 22px;
+}
+.trip-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 70vh;
+}
+@media (max-width: 700px) {
+  .trip-panel.trip-page {
+    width: 100%;
+    margin: 0;
+    border-radius: 0;
+  }
+  .trip-page .timeline-stop {
+    flex-wrap: wrap;
+  }
+  .trip-page .stop-info {
+    flex: 1;
+  }
+  .trip-page .stop-actions {
+    width: 100%;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+  .trip-page .panel-header h2 {
+    font-size: 26px;
+  }
+}
