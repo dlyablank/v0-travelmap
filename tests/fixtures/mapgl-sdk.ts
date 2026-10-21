@@ -31,6 +31,10 @@ export function installMapGLFixture() {
       this.zoom = options.zoom;
       if (!options.key) throw new Error('The SDK needs a key');
       state.maps++;
+      Object.assign(window, {
+        mapglNavigate: (coordinates: number[]) => this.setCenter(coordinates),
+        mapglView: () => ({ center: this.getCenter(), zoom: this.getZoom() }),
+      });
       this.canvas = document.createElement('canvas');
       this.canvas.className = 'mapgl-fixture-canvas';
       Object.assign(this.canvas.style, { width: '100%', height: '100%', touchAction: 'none' });

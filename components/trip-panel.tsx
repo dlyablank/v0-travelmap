@@ -20,7 +20,9 @@ import {
   Bookmark,
 } from 'lucide-react';
 import type { Place, RouteResult } from '@/lib/types';
+import { cityTripStops } from '@/lib/trip-collection';
 import { useExplorer } from '@/lib/store';
+import { locationGroups, locationId as placeLocationId } from '@/lib/locations';
 import { regions, getRegion } from '@/lib/regions';
 import { dayPlan, defaultDay, clockLabel } from '@/lib/day-plan';
 import { optimizeStops } from '@/lib/routing';
@@ -35,7 +37,13 @@ export function TripPanel({
   onRoute,
   route,
   onSelect,
+  cityId,
+  onChooseCity,
+  onBackToCities,
 }: {
+  cityId?: string;
+  onChooseCity?: (id: string) => void;
+  onBackToCities?: () => void;
   places: Place[];
   onClose: () => void;
   onRoute: (r: RouteResult | null) => void;
@@ -55,15 +63,14 @@ export function TripPanel({
     setDaySettings,
   } = useExplorer();
   const region = getRegion(regionId);
-  const locationId = regionId;
+  const locationId = cityId || regionId;
+  const city = cityId ? locationGroups(places).find((group) => group.id === cityId) : undefined;
+  const destinationName = city?.name || region.name;
   const stops = useMemo(
-    () =>
-      trip
-        .map((id) => places.find((p) => p.id === id))
-        .filter((p): p is Place => !!p && p.region === region.name),
-    [trip, places, region.name],
+    () => cityTripStops(trip, places, cityId, regionId),
+    [trip, places, cityId, regionId],
   );
-  const settings = daySettings[locationId] || defaultDay;
+  const settings = daySettings[locationId] || daySettings[regionId] || defaultDay;
   const signature = `${locationId}:${mode}:${stops.map((p) => p.id).join(',')}`;
   const activeRoute =
     route?.stopIds?.join(',') === stops.map((p) => p.id).join(',') &&
@@ -83,7 +90,7 @@ export function TripPanel({
   useEffect(() => () => pending.current?.abort(), []);
   const build = useCallback(
     async (shouldOptimize = false) => {
-      if (stops.length < 2 || trip.length > 20 || plan.budget <= 0) {
+      if (stops.length < 2 || stops.length > 20 || plan.budget <= 0) {
         onRoute(null);
         return;
       }
@@ -173,7 +180,7 @@ export function TripPanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: `${region.name} · один день`,
+          title: `${destinationName} · один день`,
           durationDays: 1,
           transportMode: mode,
           stops: stops.map((p) => p.id),
@@ -196,7 +203,7 @@ export function TripPanel({
       [
         JSON.stringify(
           {
-            title: region.name,
+            title: destinationName,
             regionId,
             locationId,
             durationDays: 1,
@@ -220,13 +227,16 @@ export function TripPanel({
     URL.revokeObjectURL(url);
   }
   const savedHere = places.filter(
-    (p) => saved.includes(p.id) && p.region === region.name && !trip.includes(p.id),
+    (p) =>
+      saved.includes(p.id) &&
+      (cityId ? placeLocationId(p) === cityId : p.region === region.name) &&
+      !trip.includes(p.id),
   );
   return (
     <main className="trip-panel trip-page" aria-label="Создание поездки">
       <div className="panel-header">
         <div>
-          <div className="dialog-eyebrow">{region.name.toUpperCase()} · ОДИН ХОРОШИЙ ДЕНЬ</div>
+          <div className="dialog-eyebrow">{destinationName.toUpperCase()} · ОДИН ХОРОШИЙ ДЕНЬ</div>
           <h2>
             Моя поездка<span>{stops.length}</span>
           </h2>
@@ -248,23 +258,51 @@ export function TripPanel({
         <Button variant="outline" onClick={onClose}>
           Выбрать места в каталоге <ArrowUpRight size={17} />
         </Button>
-        <label className="trip-location-field">
-          <MapPin size={18} />
-          <span>
-            Регион поездки
-            <select
-              aria-label="Регион поездки"
-              value={locationId}
-              onChange={(event) => chooseLocation(event.target.value)}
-            >
-              {regions.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </span>
-        </label>
+        {cityId ? (
+          <label className="trip-location-field">
+            <MapPin size={18} />
+            <span>
+              Город поездки
+              <select
+                aria-label="Город поездки"
+                value={cityId}
+                onChange={(e) => onChooseCity?.(e.target.value)}
+              >
+                {locationGroups(places).map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name} · {group.region}
+                  </option>
+                ))}
+              </select>
+            </span>
+          </label>
+        ) : (
+          <>
+            {' '}
+            <label className="trip-location-field">
+              <MapPin size={18} />
+              <span>
+                Регион поездки
+                <select
+                  aria-label="Регион поездки"
+                  value={locationId}
+                  onChange={(event) => chooseLocation(event.target.value)}
+                >
+                  {regions.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </label>
+          </>
+        )}
+        {onBackToCities && (
+          <Button variant="outline" onClick={onBackToCities}>
+            <ArrowLeft size={16} /> Все города и добавленные места
+          </Button>
+        )}
         <TripCover stops={stops} days={1} mode={mode} route={activeRoute} />
         <div className="day-time-fields">
           <label>
@@ -274,7 +312,7 @@ export function TripPanel({
               type="time"
               value={settings.start}
               onChange={(e) => {
-                if (e.target.value) setDaySettings({ start: e.target.value });
+                if (e.target.value) setDaySettings({ start: e.target.value }, locationId);
               }}
             />
           </label>
@@ -285,7 +323,7 @@ export function TripPanel({
               type="time"
               value={settings.end}
               onChange={(e) => {
-                if (e.target.value) setDaySettings({ end: e.target.value });
+                if (e.target.value) setDaySettings({ end: e.target.value }, locationId);
               }}
             />
           </label>
@@ -338,7 +376,6 @@ export function TripPanel({
             {savedHere.map((p) => (
               <button
                 key={p.id}
-                disabled={stops.length >= 20}
                 onClick={() => {
                   onRoute(null);
                   toggleTrip(p.id);
@@ -530,7 +567,7 @@ export function TripPanel({
             {activeRoute && mode !== 'transit' && (
               <TripRecommendations
                 stops={stops}
-                places={places}
+                places={cityId ? places.filter((p) => placeLocationId(p) === cityId) : places}
                 route={activeRoute}
                 mode={mode}
                 onAdd={(place, index) => {
@@ -586,15 +623,15 @@ export function TripPanel({
         )}
       </div>
       <div className="trip-footer">
-        {trip.length > 20 && (
+        {stops.length > 20 && (
           <p className="form-error" role="alert">
-            В сохранённых поездках больше 20 мест. Все точки сохранены. Удалите лишние остановки
-            перед расчётом маршрута.
+            В этой локации больше 20 мест. Все точки сохранены. Удалите лишние остановки перед
+            расчётом маршрута.
           </p>
         )}
         <Button
           className="full-width"
-          disabled={stops.length < 2 || trip.length > 20 || busy || plan.budget <= 0}
+          disabled={stops.length < 2 || stops.length > 20 || busy || plan.budget <= 0}
           onClick={() => {
             void build(optimize);
           }}
@@ -605,7 +642,7 @@ export function TripPanel({
         </Button>
         <small>
           {stops.length < 2
-            ? 'Добавьте минимум два места в этом регионе'
+            ? 'Добавьте минимум два места в этой локации'
             : busy
               ? 'Учитываем переезды между остановками'
               : 'Время посещений приблизительное, старт — с первой точки'}

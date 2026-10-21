@@ -41,14 +41,16 @@ export function VideoReel({
       places.findIndex((p) => p.id === initialId),
     ),
   );
+  const [playbackOffset, setPlaybackOffset] = useState(0);
   const [muted, setMuted] = useState(true);
   const buffer = useVideoBuffer();
   const track = useRef<HTMLDivElement>(null);
   const opener = useRef(document.activeElement as HTMLElement | null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gesture = useRef<{ start: number; delta: number } | null>(null);
-  const place = places[index];
-  const nearEnd = index >= places.length - 3;
+  const playbackIndex = index + playbackOffset;
+  const place = places[playbackIndex] || places[index];
+  const nearEnd = playbackIndex >= places.length - 3;
   useEffect(() => {
     if (!nearEnd) return;
     const controller = new AbortController();
@@ -80,8 +82,14 @@ export function VideoReel({
   const step = (delta: number) => {
     if (timer.current) clearTimeout(timer.current);
     if (track.current) track.current.scrollTop = track.current.clientHeight;
+    setPlaybackOffset(0);
     setIndex((i) => Math.max(0, Math.min(places.length - 1, i + delta)));
   };
+  function updatePlayback(distance: number) {
+    const height = track.current?.clientHeight || 1;
+    const offset = Math.abs(distance) >= height * 0.5 ? Math.sign(distance) : 0;
+    setPlaybackOffset(places[index + offset] ? offset : 0);
+  }
   useEffect(() => {
     onCurrentChange(place);
   }, [place, onCurrentChange]);
@@ -123,7 +131,7 @@ export function VideoReel({
             if (['ArrowDown', 'PageDown', 'ArrowUp', 'PageUp'].includes(event.key)) {
               event.preventDefault();
               event.stopPropagation();
-              step(['ArrowDown', 'PageDown'].includes(event.key) ? 1 : -1);
+              step(playbackOffset + (['ArrowDown', 'PageDown'].includes(event.key) ? 1 : -1));
             }
           }}
         >
@@ -148,6 +156,7 @@ export function VideoReel({
               if (!current || !track.current) return;
               current.delta = current.start - event.touches[0].clientY;
               track.current.scrollTop = track.current.clientHeight + current.delta;
+              updatePlayback(current.delta);
             }}
             onTouchEnd={() => {
               const current = gesture.current;
@@ -157,15 +166,19 @@ export function VideoReel({
                 track.current.style.scrollSnapType = '';
               }
               if (current && Math.abs(current.delta) > 50) step(current.delta > 0 ? 1 : -1);
+              else setPlaybackOffset(0);
             }}
             onTouchCancel={() => {
               gesture.current = null;
+              setPlaybackOffset(0);
               if (track.current) {
                 track.current.scrollTop = track.current.clientHeight;
                 track.current.style.scrollSnapType = '';
               }
             }}
             onScroll={() => {
+              if (track.current)
+                updatePlayback(track.current.scrollTop - track.current.clientHeight);
               if (gesture.current) return;
               if (timer.current) clearTimeout(timer.current);
               timer.current = setTimeout(() => {
@@ -192,15 +205,15 @@ export function VideoReel({
                 <article
                   className="reel-slide"
                   key={item.id}
-                  aria-hidden={offset !== 0}
-                  inert={offset !== 0}
+                  aria-hidden={offset !== playbackOffset}
+                  inert={offset !== playbackOffset}
                   data-place-id={item.id}
-                  data-active={offset === 0}
+                  data-active={offset === playbackOffset}
                 >
-                  {offset === 0 || buffer ? (
+                  {offset === playbackOffset || buffer ? (
                     <VideoPlayer
                       place={item}
-                      active={offset === 0}
+                      active={offset === playbackOffset}
                       muted={muted}
                       onMutedChange={setMuted}
                       preload="auto"
@@ -291,18 +304,22 @@ export function VideoReel({
             </button>
           </div>
           <div className="reel-navigation">
-            <button aria-label="Предыдущее видео" disabled={index === 0} onClick={() => step(-1)}>
+            <button
+              aria-label="Предыдущее видео"
+              disabled={playbackIndex === 0}
+              onClick={() => step(playbackOffset - 1)}
+            >
               <ArrowUp />
             </button>
             <button
               aria-label="Следующее видео"
-              disabled={index === places.length - 1}
-              onClick={() => step(1)}
+              disabled={playbackIndex === places.length - 1}
+              onClick={() => step(playbackOffset + 1)}
             >
               <ArrowDown />
             </button>
           </div>
-          {index === places.length - 1 ? (
+          {playbackIndex === places.length - 1 ? (
             <div className="reel-feed-status" role="status">
               <span>
                 {feedState === 'loading'

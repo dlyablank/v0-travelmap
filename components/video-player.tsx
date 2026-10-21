@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Play, Pause, Volume2, VolumeX, ExternalLink, LoaderCircle, RotateCcw } from 'lucide-react';
 import type { Place } from '@/lib/types';
 import { youtubeId } from '@/lib/validation';
@@ -32,7 +32,7 @@ export function VideoPlayer({
   const [playBlocked, setPlayBlocked] = useState(false);
   const source = place.video?.playbackUrl;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const v = ref.current;
     if (!v) return;
     // React Strict Mode replays effects without rebuilding the DOM. Restore a

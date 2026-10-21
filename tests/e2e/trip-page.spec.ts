@@ -56,7 +56,7 @@ test('direct trip page shows full walking instructions, current Yandex order, au
       },
     });
   });
-  await page.goto('/trip');
+  await page.goto(`/trip?city=${encodeURIComponent(locationId(stops[0]))}`);
   const planner = page.getByRole('main', { name: 'Создание поездки' });
   await expect(planner.locator('.stops > li')).toHaveCount(3);
   await expect(planner.getByRole('combobox', { name: /^Время посещения/ })).toHaveCount(0);
@@ -129,7 +129,7 @@ test('transit has pair links and unknown times; retry works and server save is h
       json: { error: 'Поездка сохранена только в браузере. База не подключена.' },
     });
   });
-  await page.goto('/trip');
+  await page.goto(`/trip?city=${encodeURIComponent(locationId(stops[0]))}`);
   await page.getByRole('button', { name: 'Общественный транспорт', exact: true }).click();
   await page.getByRole('button', { name: 'Собрать маршрут', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('Тестовая ошибка');
@@ -155,13 +155,13 @@ test('transit has pair links and unknown times; retry works and server save is h
 
 test('empty, single stop and invalid day have useful states', async ({ page }) => {
   await page.goto('/trip');
-  await expect(page.getByText('Начните с любимого места')).toBeVisible();
-  await page.getByRole('button', { name: 'Выбрать места в каталоге' }).click();
+  await expect(page.getByText('Соберите идеи для поездки')).toBeVisible();
+  await page.getByRole('link', { name: 'Найти места' }).click();
   await expect(page).toHaveURL('/');
   await expect(page.locator('.map-nudge')).toHaveCount(0);
   await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
-  if (await page.getByRole('button', { name: 'Лента', exact: true }).isVisible())
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
+  if (await page.getByRole('button', { name: 'Исследовать', exact: true }).isVisible())
+    await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await page
     .getByRole('button', { name: `Добавить в поездку ${stops[0].name}`, exact: true })
     .click();
@@ -170,8 +170,9 @@ test('empty, single stop and invalid day have useful states', async ({ page }) =
     .filter({ visible: true })
     .first()
     .click();
+  await page.getByRole('link', { name: 'Составить маршрут: Коломна', exact: true }).click();
   await expect(page.locator('.stops > li')).toHaveCount(1);
-  await expect(page.getByText('Добавьте минимум два места в этом регионе')).toBeVisible();
+  await expect(page.getByText('Добавьте минимум два места в этой локации')).toBeVisible();
   await page.getByLabel('Окончание дня', { exact: true }).fill('08:00');
   await expect(page.getByRole('main').getByRole('alert')).toContainText('позже начала');
   await expect(page.getByRole('button', { name: 'Собрать маршрут', exact: true })).toBeDisabled();

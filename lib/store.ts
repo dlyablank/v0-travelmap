@@ -15,7 +15,7 @@ type State = {
   syncLocations: (places: Place[]) => void;
   setLocation: (id: string) => void;
   daySettings: Record<string, DaySettings>;
-  setDaySettings: (settings: Partial<DaySettings>) => void;
+  setDaySettings: (settings: Partial<DaySettings>, scope?: string) => void;
   regionId: string;
   regionTrips: Record<string, string[]>;
   setRegion: (id: string) => void;
@@ -26,7 +26,7 @@ type State = {
   setMode: (m: 'car' | 'walk' | 'transit') => void;
   saved: string[];
   customPlaces: Place[];
-  toggleTrip: (id: string) => void;
+  toggleTrip: (id: string, ownerRegion?: string) => void;
   toggleSaved: (id: string) => void;
   reorder: (ids: string[], unloadedIds?: string[]) => void;
   addPlace: (p: Place) => void;
@@ -41,11 +41,15 @@ export const useExplorer = create<State>()(
       regionTripsMigrated: false,
       unassignedStops: [],
       daySettings: {},
-      setDaySettings: (patch) =>
+      setDaySettings: (patch, scope) =>
         set((s) => ({
           daySettings: {
             ...s.daySettings,
-            [s.regionId]: { ...defaultDay, ...s.daySettings[s.regionId], ...patch },
+            [scope || s.regionId]: {
+              ...defaultDay,
+              ...(s.daySettings[scope || s.regionId] || s.daySettings[s.regionId]),
+              ...patch,
+            },
           },
         })),
       setLocation: (id) =>
@@ -171,17 +175,17 @@ export const useExplorer = create<State>()(
       setMode: (transportMode) => set({ transportMode }),
       saved: [],
       customPlaces: [],
-      toggleTrip: (id) =>
+      toggleTrip: (id, ownerRegion) =>
         set((s) => {
-          const trip = s.trip.includes(id)
-            ? s.trip.filter((x) => x !== id)
-            : s.trip.length < 20
-              ? [...s.trip, id]
-              : s.trip;
+          const owner = ownerRegion || s.regionId;
+          const previous = owner === s.regionId ? s.trip : s.regionTrips[owner] || [];
+          const trip = previous.includes(id)
+            ? previous.filter((other) => other !== id)
+            : [...previous, id];
           return {
-            trip,
-            regionTrips: { ...s.regionTrips, [s.regionId]: trip },
-            unassignedStops: s.unassignedStops.filter((x) => x !== id),
+            ...(owner === s.regionId ? { trip } : {}),
+            regionTrips: { ...s.regionTrips, [owner]: trip },
+            unassignedStops: s.unassignedStops.filter((other) => other !== id),
           };
         }),
       toggleSaved: (id) =>

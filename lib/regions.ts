@@ -27,3 +27,17 @@ export function getRegion(id: string) {
 export function inRegion(place: Place, region: ExplorerRegion) {
   return place.region === region.name;
 }
+
+// Hysteresis keeps the selector stable on an overview containing both regions.
+export function regionAtCenter(center: [number, number], currentId: string) {
+  const distance = (region: ExplorerRegion) => {
+    const lat = (center[1] * Math.PI) / 180;
+    const dx = (region.center[0] - center[0]) * Math.cos(lat);
+    return Math.hypot(dx, region.center[1] - center[1]);
+  };
+  const nearest = [...regions].sort((a, b) => distance(a) - distance(b))[0];
+  const current = getRegion(currentId);
+  return nearest.id !== current.id && distance(nearest) * 1.25 < distance(current)
+    ? nearest
+    : current;
+}

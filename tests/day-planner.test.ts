@@ -100,6 +100,14 @@ describe('one-day plans', () => {
     useExplorer.getState().setDaySettings({ start: '08:00' });
     expect(useExplorer.getState().daySettings.kolomna.start).toBe('10:00');
     expect(useExplorer.getState().daySettings.karelia.start).toBe('08:00');
+    useExplorer.getState().setRegion('kolomna');
+    useExplorer.getState().setDaySettings({ end: '17:00' }, locationId(a));
+    expect(useExplorer.getState().daySettings[locationId(a)]).toEqual({
+      ...defaultDay,
+      start: '10:00',
+      end: '17:00',
+    });
+    expect(useExplorer.getState().daySettings.kolomna.end).toBe(defaultDay.end);
   });
   it('shortlists at most three videos along the route in the same location', () => {
     const candidates = [

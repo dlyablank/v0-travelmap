@@ -5,18 +5,17 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from './ui/dial
 import { Button } from './ui/button';
 import { categories, type Place } from '@/lib/types';
 import { externalSource, placeInput } from '@/lib/validation';
+import { regionAtCenter } from '@/lib/regions';
 import { useExplorer } from '@/lib/store';
 import { videoThumbnail } from '@/lib/video-thumbnail';
 export type DraftLocation = { latitude: number; longitude: number };
 export function ImportDialog({
-  region,
   open,
   onOpenChange,
   location,
   onPick,
   onAdded,
 }: {
-  region: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   location: DraftLocation | null;
@@ -56,7 +55,7 @@ export function ImportDialog({
     const latitude = lat !== '' ? Number(lat) : location?.latitude;
     const longitude = lng !== '' ? Number(lng) : location?.longitude;
     const parsed = placeInput.safeParse({
-      region,
+      region: regionAtCenter([Number(longitude), Number(latitude)], 'karelia').name,
       name,
       description,
       city,

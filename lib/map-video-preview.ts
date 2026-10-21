@@ -1,7 +1,7 @@
 import { demoVideos } from './demo-videos';
 
 // Small muted previews use the same public/served URL contract as S3 media.
-export function createMapVideoPreview(button: HTMLButtonElement, url: string, seconds?: number) {
+export function createMapVideoPreview(button: HTMLElement, url: string, seconds?: number) {
   let video: HTMLVideoElement | null = null;
   let failed = false;
   let blocked = false;

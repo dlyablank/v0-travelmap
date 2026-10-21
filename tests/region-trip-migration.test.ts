@@ -58,7 +58,7 @@ it('keeps unknown metadata deferred and can resolve it without importing old buc
   useExplorer.getState().syncLocations([a, late]);
   expect(useExplorer.getState().trip).toEqual(['late', a.id]);
 });
-it('does not silently truncate a migration over 20 places and prevents more additions', () => {
+it('keeps collected places beyond the separate 20-stop route limit', () => {
   const many = Array.from({ length: 22 }, (_, i) => ({ ...a, id: `many-${i}` }));
   useExplorer.setState({
     trip: many.slice(0, 10).map((p) => p.id),
@@ -67,10 +67,10 @@ it('does not silently truncate a migration over 20 places and prevents more addi
   useExplorer.getState().syncLocations(many);
   expect(useExplorer.getState().trip).toHaveLength(22);
   useExplorer.getState().toggleTrip('extra');
-  expect(useExplorer.getState().trip).toHaveLength(22);
+  expect(useExplorer.getState().trip).toHaveLength(23);
   useExplorer.getState().toggleTrip(many[0].id);
   useExplorer.getState().syncLocations(many);
-  expect(useExplorer.getState().trip).toHaveLength(21);
+  expect(useExplorer.getState().trip).toHaveLength(22);
   expect(useExplorer.getState().trip).not.toContain(many[0].id);
 });
 it('moves a deferred legacy id to its actual region when metadata arrives', () => {

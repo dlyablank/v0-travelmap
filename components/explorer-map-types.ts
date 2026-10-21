@@ -12,4 +12,8 @@ export interface ExplorerMapProps {
   onReady?: () => void;
   onNeedVideos?: () => void;
   previewsVisible?: boolean;
+  tripIds?: string[];
+  onTripToggle?: (id: string) => void;
+  focusRequest?: number;
+  onRegionChange?: (regionId: string) => void;
 }

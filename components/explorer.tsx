@@ -25,9 +25,10 @@ import {
   Route,
   Grid2X2,
   LoaderCircle,
+  Info,
 } from 'lucide-react';
 import { places as demoPlaces } from '@/lib/data';
-import { regions, getRegion, inRegion } from '@/lib/regions';
+import { regions, getRegion } from '@/lib/regions';
 import { locationId as placeLocationId, locationGroups } from '@/lib/locations';
 import { categories, type Place, type RouteResult } from '@/lib/types';
 import { haversine } from '@/lib/routing';
@@ -38,7 +39,7 @@ import { PlaceImage } from './place-image';
 import { VideoPlayer } from './video-player';
 import { VideoReel } from './video-reel';
 import { VideoAttribution } from './video-attribution';
-import { TripStopsStrip } from './trip-stops-strip';
+import { collectedTripIds } from '@/lib/trip-collection';
 import { useCardVideoPreviews } from './card-video-previews';
 import { useRouter } from 'next/navigation';
 import { ImportDialog, type DraftLocation } from './import-dialog';
@@ -137,18 +138,26 @@ export default function Explorer() {
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(true);
   const {
-    trip,
+    trip: plannerTrip,
+    regionTrips,
+    unassignedStops,
     saved,
     customPlaces,
     toggleSaved,
     toggleTrip,
     regionId,
-    setRegion,
-    locationId,
-    setLocation: setTripLocation,
     syncLocations,
   } = useExplorer();
-  const region = getRegion(hydrated ? regionId : 'karelia');
+  const [mapRegionId, setMapRegionId] = useState('karelia');
+  const [focusRequest, setFocusRequest] = useState(0);
+  const [savedLocation, setSavedLocation] = useState('');
+  const [radiusRegion, setRadiusRegion] = useState('karelia');
+  const [mobileSearch, setMobileSearch] = useState(false);
+  const region = getRegion(mapRegionId);
+  const trip = useMemo(
+    () => collectedTripIds({ trip: plannerTrip, regionTrips, unassignedStops }),
+    [plannerTrip, regionTrips, unassignedStops],
+  );
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const touch = useRef(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -200,64 +209,50 @@ export default function Explorer() {
     const id = new URLSearchParams(window.location.search).get('place');
     const place = allPlaces.find((p) => p.id === id);
     if (place) {
-      const destination = regions.find((r) => r.name === place.region);
-      if (destination) setRegion(destination.id);
-      setTripLocation(placeLocationId(place));
       setActive(place);
       setMobileView('map');
       window.history.replaceState(null, '', '/');
     }
-  }, [hydrated, loading, allPlaces, setRegion, setTripLocation]);
+  }, [hydrated, loading, allPlaces]);
   const savedGroups = locationGroups(allPlaces.filter((p) => hydrated && saved.includes(p.id)));
   function chooseLocation(id: string) {
-    const group = locationGroups(allPlaces).find((g) => g.id === id);
-    const destination = regions.find((r) => r.name === group?.region);
-    if (destination) setRegion(destination.id);
-    setTripLocation(id);
-    setRoute(null);
-    setActive(null);
-    setCategory('Все места');
-    setQuery('');
-    setTimeFilter('any');
+    setSavedLocation(id);
   }
   function openSaved() {
     setSavedOnly(true);
+    setActive(null);
+    setSavedLocation('');
     setMobileView('feed');
     setFeedMode(false);
-    chooseLocation(
-      savedGroups.find((g) => g.id === locationId)?.id || savedGroups[0]?.id || locationId,
-    );
   }
-  const regionPlaces = useMemo(
-    () => allPlaces.filter((p) => inRegion(p, region)),
-    [allPlaces, region],
-  );
-  const travelOrigin = useMemo(
-    () =>
-      region.id === 'karelia'
-        ? { latitude: 61.6991, longitude: 30.6793 }
-        : { latitude: region.center[1], longitude: region.center[0] },
-    [region],
-  );
+  const travelOrigin = useMemo(() => {
+    const origin = getRegion(radiusRegion);
+    return radiusRegion === 'karelia'
+      ? { latitude: 61.6991, longitude: 30.6793 }
+      : { latitude: origin.center[1], longitude: origin.center[0] };
+  }, [radiusRegion]);
   const radiusOrigin = timeFilter === 'any' ? null : travelOrigin;
   const mapPlaces = useMemo(
     () =>
       allPlaces.filter(
         (p) =>
           (category === 'Все места' || p.category === category) &&
-          (!savedOnly || (saved.includes(p.id) && placeLocationId(p) === locationId)) &&
+          (!savedOnly ||
+            (saved.includes(p.id) && (!savedLocation || placeLocationId(p) === savedLocation))) &&
           `${p.name} ${p.city} ${p.region}`.toLowerCase().includes(query.toLowerCase()) &&
           (!radiusOrigin || haversine(radiusOrigin, p) / 1000 / 55 <= Number(timeFilter)),
       ),
-    [allPlaces, radiusOrigin, category, savedOnly, saved, query, timeFilter, locationId],
+    [allPlaces, radiusOrigin, category, savedOnly, saved, query, timeFilter, savedLocation],
   );
-  const filtered = useMemo(() => mapPlaces.filter((p) => inRegion(p, region)), [mapPlaces, region]);
+  const filtered = mapPlaces;
   const previewPlaces = useMemo(
     () => (active ? mapPlaces.filter((p) => p.region === active.region) : filtered),
     [active, mapPlaces, filtered],
   );
   const selectPlace = useCallback((p: Place) => {
     setActive(p);
+    setMobileView('map');
+    setFeedMode(false);
     cardRefs.current[p.id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, []);
   useCardVideoPreviews(
@@ -287,9 +282,7 @@ export default function Explorer() {
   function openReel(place: Place, fromMap = false) {
     reelReturn.current = { fromMap, place };
     setActive(null);
-    const videos = (fromMap ? mapPlaces.filter((p) => p.region === place.region) : filtered).filter(
-      (p) => p.video,
-    );
+    const videos = filtered.filter((p) => p.video);
     const start = videos.findIndex((p) => p.id === place.id);
     setReelPlaces(
       start < 0 ? [place, ...videos] : [...videos.slice(start), ...videos.slice(0, start)],
@@ -300,9 +293,6 @@ export default function Explorer() {
     setReelId(null);
     const { fromMap, place } = reelReturn.current;
     if (fromMap && place) {
-      const destination = regions.find((r) => r.name === place.region);
-      if (destination && destination.id !== region.id) setRegion(destination.id);
-      setTripLocation(placeLocationId(place));
       setMobileView('map');
       setFeedMode(false);
       selectPlace(place);
@@ -315,18 +305,10 @@ export default function Explorer() {
     const place =
       allPlaces.find((p) => p.id === id) ||
       (reelReturn.current.place?.id === id ? reelReturn.current.place : null);
-    if (place) {
-      // Preserve metadata from transient video/map results for direct /trip visits.
-      useExplorer.getState().addPlace(place);
-      const destination = regions.find((r) => r.name === place.region);
-      if (destination) setRegion(destination.id);
-    }
-    const currentTrip = useExplorer.getState().trip;
-    if (!currentTrip.includes(id) && currentTrip.length >= 20) {
-      notify('В одну поездку можно добавить до 20 мест.');
-      return;
-    }
-    toggleTrip(id);
+    if (!place || !hydrated) return;
+    useExplorer.getState().addPlace(place);
+    const owner = regions.find((candidate) => candidate.name === place.region)?.id || regionId;
+    toggleTrip(id, owner);
     setRoute(null);
   }
   function next(d: number) {
@@ -357,9 +339,6 @@ export default function Explorer() {
     return () => document.removeEventListener('keydown', key);
   }, [active, previewPlaces, importOpen, about, reelId]);
   const currentTrip = hydrated ? trip.length : 0;
-  const selectedStops = hydrated
-    ? trip.map((id) => allPlaces.find((p) => p.id === id)).filter((p): p is Place => !!p)
-    : [];
   return (
     <div className={`explorer ${feedMode ? 'feed-expanded' : ''}`}>
       <header className="app-header">
@@ -372,6 +351,7 @@ export default function Explorer() {
             setSavedOnly(false);
             setActive(null);
             setFeedMode(false);
+            setMobileView('map');
           }}
         >
           <span className="brand-symbol">
@@ -385,35 +365,79 @@ export default function Explorer() {
           </span>
         </button>
         <nav className="main-nav" aria-label="Главная навигация">
-          <button className={!savedOnly ? 'active' : ''} onClick={() => setSavedOnly(false)}>
-            Исследовать
+          <button
+            aria-label="Исследовать"
+            title="Исследовать"
+            className={!savedOnly ? 'active' : ''}
+            onClick={() => {
+              setSavedOnly(false);
+              setActive(null);
+              setMobileView('feed');
+            }}
+          >
+            <Grid2X2 size={21} />
+            <span className="nav-label">Исследовать</span>
           </button>
-          <button className={savedOnly ? 'active' : ''} onClick={openSaved}>
-            Сохранённое
+          <button
+            aria-label="Сохранённое"
+            title="Сохранённое"
+            className={savedOnly ? 'active' : ''}
+            onClick={openSaved}
+          >
+            <Bookmark size={21} />
+            <span className="nav-label">Сохранённое</span>
             {hydrated && saved.length > 0 && <span className="nav-count">{saved.length}</span>}
           </button>
-          <button onClick={() => setAbout(true)}>
-            Как это работает <ArrowUpRight size={13} />
+          <button
+            aria-label="Как это работает"
+            title="Как это работает"
+            onClick={() => setAbout(true)}
+          >
+            <Info size={21} />
+            <span className="nav-label">Как это работает</span>
           </button>
         </nav>
         <div className="header-actions">
-          <Button variant="ghost" className="add-video" onClick={() => setImportOpen(true)}>
-            <Plus size={17} /> Добавить видео
+          <Button
+            variant="ghost"
+            aria-label="Добавить видео"
+            title="Добавить видео"
+            className="add-video"
+            onClick={() => setImportOpen(true)}
+          >
+            <Plus size={20} />
+            <span className="button-label">Добавить видео</span>
           </Button>
-          <Button variant="outline" className="trip-button" onClick={() => setTripOpen(!tripOpen)}>
-            <Route size={17} /> Моя поездка <span className="trip-count">{currentTrip}</span>
+          <Button
+            variant="outline"
+            aria-label={`Моя поездка, мест: ${currentTrip}`}
+            title="Моя поездка"
+            className="trip-button"
+            onClick={() => setTripOpen(!tripOpen)}
+          >
+            <Route size={20} />
+            <span className="button-label">Моя поездка</span>{' '}
+            <span className="trip-count">{currentTrip}</span>
           </Button>
           <button className="avatar" onClick={() => setAbout(true)} aria-label="О проекте">
             WE
           </button>
         </div>
       </header>
-      <div className="toolbar">
+      <div className={`toolbar ${mobileSearch ? 'mobile-search-open' : ''}`}>
         <div className="search-field">
+          <button
+            className="mobile-search-toggle"
+            aria-label="Открыть поиск"
+            aria-expanded={mobileSearch}
+            onClick={() => setMobileSearch(!mobileSearch)}
+          >
+            <Search size={20} />
+          </button>
           <Search size={18} />
           <input
             aria-label="Поиск по городу и региону"
-            placeholder="Куда отправимся?"
+            placeholder="Найти место"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -422,21 +446,16 @@ export default function Explorer() {
               <X size={15} />
             </button>
           )}
-          <label className="search-region">
+          <label className="search-region" title="Приблизить регион на карте">
+            <MapPin className="mobile-region-icon" size={21} />
             <select
               aria-label="Регион путешествия"
               disabled={!hydrated}
               value={region.id}
               onChange={(e) => {
-                setRegion(e.target.value);
+                setMapRegionId(e.target.value);
+                setFocusRequest((value) => value + 1);
                 setActive(null);
-                setReelId(null);
-                setRoute(null);
-                setTripOpen(false);
-                setQuery('');
-                setCategory('Все места');
-                setTimeFilter('any');
-                setLocation(null);
               }}
             >
               {regions.map((r) => (
@@ -454,11 +473,13 @@ export default function Explorer() {
             return (
               <button
                 key={c}
+                aria-label={c}
+                title={c}
                 className={category === c ? 'active' : ''}
                 onClick={() => setCategory(c)}
               >
                 <Icon size={15} />
-                {c}
+                <span className="category-label">{c}</span>
               </button>
             );
           })}
@@ -499,37 +520,23 @@ export default function Explorer() {
             </button>
           </div>
         </div>
-        <nav className="mobile-tools" aria-label="Действия на телефоне">
-          <button
-            aria-label={mobileView === 'map' ? 'Лента' : 'Карта'}
-            title={mobileView === 'map' ? 'Лента' : 'Карта'}
-            onClick={() => setMobileView(mobileView === 'map' ? 'feed' : 'map')}
-          >
-            {mobileView === 'map' ? <Grid2X2 size={20} /> : <MapIcon size={20} />}
-            <small>{mobileView === 'map' ? 'Лента' : 'Карта'}</small>
-          </button>
-          <button
-            aria-label={`Моя поездка, мест: ${currentTrip}`}
-            title="Моя поездка"
-            className="mobile-trip"
-            onClick={() => setTripOpen(true)}
-          >
-            <Route size={20} />
-            {currentTrip > 0 && <span>{currentTrip}</span>}
-            <small>Поездка</small>
-          </button>
-          <button
-            aria-label="Добавить видео"
-            title="Добавить видео"
-            onClick={() => setImportOpen(true)}
-          >
-            <Plus size={22} />
-            <small>Видео</small>
-          </button>
-        </nav>
         {filtersOpen && (
           <div className="filter-popover">
-            <b>Радиус поездки из {region.originName}</b>
+            <b>Радиус поездки</b>
+            <label>
+              Откуда считать время
+              <select
+                aria-label="Начало радиуса поиска"
+                value={radiusRegion}
+                onChange={(e) => setRadiusRegion(e.target.value)}
+              >
+                {regions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.originName}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               Ориентир по времени
               <select
@@ -566,7 +573,7 @@ export default function Explorer() {
             <div className="eyebrow">
               <span /> СМОТРЕТЬ. ВЫБИРАТЬ. ЕХАТЬ.
             </div>
-            <h1>{savedOnly ? 'Ваши открытия' : region.heading}</h1>
+            <h1>{savedOnly ? 'Ваши открытия' : 'Места для вашей поездки'}</h1>
             <p>
               {savedOnly
                 ? 'Любимые места для следующей поездки.'
@@ -574,19 +581,22 @@ export default function Explorer() {
             </p>
             <div className="region-caption">
               <MapPin size={13} />
-              <b>{region.name}</b>
+              <b>Все направления</b>
               <span>·</span>
               <span>
-                {regionPlaces.length} мест · {regionPlaces.filter((p) => p.video).length} видео
+                {allPlaces.length} мест · {allPlaces.filter((p) => p.video).length} видео
               </span>
             </div>
           </div>
           {savedOnly && (
             <nav className="saved-locations" aria-label="Сохранённое по локациям">
+              <button aria-pressed={!savedLocation} onClick={() => setSavedLocation('')}>
+                Все локации
+              </button>
               {savedGroups.map((group) => (
                 <button
                   key={group.id}
-                  aria-pressed={group.id === locationId}
+                  aria-pressed={group.id === savedLocation}
                   onClick={() => chooseLocation(group.id)}
                 >
                   <MapPin size={15} />
@@ -733,6 +743,10 @@ export default function Explorer() {
         <section className="map-panel" aria-label="Интерактивная карта">
           <ExplorerMap
             region={region}
+            focusRequest={focusRequest}
+            onRegionChange={setMapRegionId}
+            tripIds={trip}
+            onTripToggle={addToTrip}
             places={mapPlaces}
             onNeedVideos={loadMapVideos}
             active={active}
@@ -746,6 +760,18 @@ export default function Explorer() {
               setImportOpen(true);
             }}
           />
+          <button
+            className="mobile-reel-launch"
+            aria-label="Смотреть видеоленту"
+            title="Видео без карты"
+            disabled={!filtered.some((p) => p.video)}
+            onClick={() => {
+              const first = active?.video ? active : filtered.find((p) => p.video);
+              if (first) openReel(first);
+            }}
+          >
+            <Play size={26} fill="currentColor" />
+          </button>
           <div className="map-discover-label">
             <span className="tiny-compass">
               <Compass size={16} />
@@ -859,22 +885,6 @@ export default function Explorer() {
           )}
         </section>
       </main>
-      {!tripOpen && !reelId && !pickMode && !importOpen && (
-        <TripStopsStrip
-          stops={selectedStops}
-          onRemove={addToTrip}
-          onOpen={() => setTripOpen(true)}
-          onSelect={(place) => {
-            setCategory('Все места');
-            setQuery('');
-            setSavedOnly(false);
-            setTimeFilter('any');
-            setMobileView('map');
-            setFeedMode(false);
-            selectPlace(place);
-          }}
-        />
-      )}
       {reelId && reelPlaces.length > 0 && (
         <VideoReel
           key={reelId}
@@ -886,16 +896,8 @@ export default function Explorer() {
           onClose={closeReel}
           onCurrentChange={rememberReelPlace}
           onSave={toggleSaved}
-          onTrip={(id) => {
-            const place = reelReturn.current.place;
-            const destination = regions.find((r) => r.name === place?.region);
-            if (destination && destination.id !== region.id) setRegion(destination.id);
-            addToTrip(id);
-          }}
+          onTrip={addToTrip}
           onMap={(place) => {
-            const destination = regions.find((r) => r.name === place.region);
-            if (destination && destination.id !== region.id) setRegion(destination.id);
-            setTripLocation(placeLocationId(place));
             setReelId(null);
             setMobileView('map');
             setFeedMode(false);
@@ -916,7 +918,6 @@ export default function Explorer() {
         </span>
       </footer>
       <ImportDialog
-        region={region.name}
         open={importOpen}
         onOpenChange={setImportOpen}
         location={location}

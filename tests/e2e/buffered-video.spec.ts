@@ -4,7 +4,7 @@ async function openKolomna(page: Page, mobile: boolean) {
   await page.route('https://tiles.openfreemap.org/**', (r) => r.abort());
   await page.goto('/');
   await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
-  if (mobile) await page.getByRole('button', { name: 'Лента', exact: true }).click();
+  if (mobile) await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await page
     .getByRole('button', { name: 'Открыть Стены Коломенского кремля', exact: true })
     .click();
@@ -185,7 +185,11 @@ test('the feed loads unseen places, stops at the end, and picks up newly added v
   await expect(reel.getByRole('button', { name: 'Следующее видео', exact: true })).toBeDisabled();
   await reel.locator('.reel-place-details > summary').click();
   await reel.getByRole('button', { name: 'Показать на карте', exact: true }).click();
-  await expect(page.getByRole('combobox', { name: 'Регион путешествия' })).toHaveValue('karelia');
+  await expect(page.locator('.active-preview h2')).toHaveText(fresh.name);
+  // The selector follows the camera after its cross-region fly animation settles.
+  await expect(page.getByRole('combobox', { name: 'Регион путешествия' })).toHaveValue('karelia', {
+    timeout: 15000,
+  });
   await expect(page.locator('.active-preview h2')).toHaveText(fresh.name);
 });
 

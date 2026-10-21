@@ -7,7 +7,7 @@ test('feed previews loop and the vertical reel advances with a single active pla
   await page.route('**/api/places', (r) => r.fulfill({ json: { places: [] } }));
   await page.goto('/');
   if (testInfo.project.name === 'mobile')
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
+    await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   const cards = page.locator('.poster-open video');
   await expect
     .poll(() =>

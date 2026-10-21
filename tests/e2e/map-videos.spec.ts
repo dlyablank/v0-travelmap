@@ -130,6 +130,8 @@ test('a browser autoplay refusal retries map previews on the first touch', async
       previews.evaluateAll((videos) => videos.every((v) => (v as HTMLVideoElement).paused)),
     )
     .toBe(true);
+  if (testInfo.project.name === 'mobile')
+    await page.getByRole('button', { name: 'Открыть поиск' }).click();
   const search = page.getByRole('textbox', { name: 'Поиск по городу и региону' });
   if (testInfo.project.name === 'mobile') await search.tap();
   else await search.click();

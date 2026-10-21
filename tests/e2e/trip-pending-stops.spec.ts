@@ -65,27 +65,25 @@ test('legacy pending id survives visible deletion, reorder, optimization and rel
           unassignedStops: string[];
         },
     );
-  await page.goto('/trip');
-  await expect(page.locator('.stops > li')).toHaveCount(22);
-  await expect(page.getByRole('button', { name: 'Собрать маршрут', exact: true })).toBeDisabled();
+  await page.goto(`/trip?city=${encodeURIComponent(locationId(known[0]))}`);
+  await expect(page.locator('.stops > li')).toHaveCount(11);
   await page.getByRole('button', { name: `Удалить ${known[0].name}`, exact: true }).click();
   await page.reload();
   expect((await stored()).trip).toContain(late.id);
   expect((await stored()).unassignedStops).toContain(late.id);
-  await expect(page.locator('.stops > li')).toHaveCount(21);
-  for (const place of known.slice(1, 3))
-    await page.getByRole('button', { name: `Удалить ${place.name}`, exact: true }).click();
-  await page.getByRole('button', { name: `Опустить ${known[3].name}`, exact: true }).click();
+  await expect(page.locator('.stops > li')).toHaveCount(10);
+  await page.getByRole('button', { name: `Опустить ${known[1].name}`, exact: true }).click();
   await page.getByLabel('Предложить порядок по близости').check();
   await page.getByRole('button', { name: 'Собрать маршрут', exact: true }).click();
   await expect(page.locator('.route-summary')).toBeVisible();
-  expect((await stored()).trip).toHaveLength(20);
-  expect((await stored()).trip).toContain(late.id);
+  expect((await stored()).trip).toHaveLength(22);
   expect((await stored()).unassignedStops).toContain(late.id);
   includeLate = true;
   await page.reload();
-  await expect(page.locator('.stops > li')).toHaveCount(20);
-  await expect(page.locator('.stops')).toContainText(late.name);
-  expect((await stored()).unassignedStops).toEqual([]);
-  for (const removed of known.slice(0, 3)) expect((await stored()).trip).not.toContain(removed.id);
+  await expect(page.locator('.stops > li')).toHaveCount(10);
+  await expect.poll(async () => (await stored()).unassignedStops).toEqual([]);
+  await page.getByRole('button', { name: 'Все города и добавленные места', exact: true }).click();
+  await expect(page.locator('.trip-city-place')).toHaveCount(22);
+  await expect(page.locator('.trip-city-groups')).toContainText(late.name);
+  expect((await stored()).trip).not.toContain(known[0].id);
 });

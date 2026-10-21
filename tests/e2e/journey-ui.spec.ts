@@ -21,9 +21,9 @@ test('discovery, author, mini-map, selected stops and trip cover stay connected'
   await page.route('**/api/places', (r) => r.fulfill({ json: { places: [] } }));
   await page.goto('/');
   if (testInfo.project.name === 'mobile')
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
+    await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Выходные в Карелии', exact: true }),
+    page.getByRole('heading', { name: 'Места для вашей поездки', exact: true }),
   ).toBeVisible();
   const open = page.getByRole('button', { name: 'Открыть Суйсари на острове', exact: true });
   const box = (await open.boundingBox())!;
@@ -50,47 +50,28 @@ test('discovery, author, mini-map, selected stops and trip cover stay connected'
     .getByRole('button', { name: 'Показать Река Сюскюянйоки на карте', exact: true })
     .click();
   await expect(reel).toHaveCount(0);
-  const strip = page.getByRole('region', { name: 'Выбранные остановки' });
-  if (testInfo.project.name === 'mobile') {
-    await expect(strip).toBeHidden();
-    await page.getByRole('button', { name: 'Закрыть место', exact: true }).click();
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
-  }
-  await expect(strip).toBeVisible();
-  await expect(
-    strip.getByRole('button', { name: 'Остановка 1: Река Сюскюянйоки', exact: true }),
-  ).toBeVisible();
-  if (testInfo.project.name !== 'mobile')
-    await page.getByRole('button', { name: 'Закрыть место', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Добавить в поездку Суйсари на острове', exact: true })
-    .click();
-  await expect(strip.getByRole('listitem')).toHaveCount(2);
-  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
-  for (const name of ['Стены Коломенского кремля', 'Улица Лажечникова'])
-    await page.getByRole('button', { name: `Добавить в поездку ${name}`, exact: true }).click();
-  await expect(strip.getByRole('listitem')).toHaveCount(2);
-  await page.reload();
+  await expect(page.locator('.selected-stops')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Закрыть место', exact: true }).click();
   if (testInfo.project.name === 'mobile')
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
-  await expect(strip.getByRole('listitem')).toHaveCount(2);
-  await strip.getByRole('button', { name: 'Собрать поездку', exact: true }).click();
+    await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
+  for (const name of ['Суйсари на острове', 'Стены Коломенского кремля', 'Улица Лажечникова'])
+    await page.getByRole('button', { name: `Добавить в поездку ${name}`, exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: /Моя поездка, мест: 4/ }).click();
+  await expect(page.locator('.trip-city-card')).toHaveCount(3);
+  await page.getByRole('link', { name: 'Составить маршрут: Коломна', exact: true }).click();
   const cover = page.getByRole('region', { name: 'Обложка поездки' });
-  await expect(cover).toBeVisible();
   await expect(cover).toContainText('ВАША ИДЕЯ ПОЕЗДКИ');
   await page.getByRole('button', { name: 'Собрать маршрут', exact: true }).click();
   await expect(cover).toContainText('МАРШРУТ СОБРАН');
   await expect(cover).toContainText('25 км по дорогам');
   await expect(cover).toContainText('30 мин в пути');
-  await page.getByRole('button', { name: 'Вернуться к местам', exact: true }).click();
-  if (testInfo.project.name === 'mobile')
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
-  await strip
-    .getByRole('button', { name: 'Убрать остановку: Стены Коломенского кремля', exact: true })
+  await page
+    .getByRole('button', { name: 'Удалить Стены Коломенского кремля', exact: true })
     .click();
-  await expect(strip.getByRole('listitem')).toHaveCount(1);
-  await strip.getByRole('button', { name: 'Собрать поездку', exact: true }).click();
   await expect(cover).toContainText('ВАША ИДЕЯ ПОЕЗДКИ');
   await expect(cover).not.toContainText('25 км');
+  await page.getByRole('button', { name: 'Все города и добавленные места', exact: true }).click();
+  await expect(page.locator('.trip-city-place')).toHaveCount(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });

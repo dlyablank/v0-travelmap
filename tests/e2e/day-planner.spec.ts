@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { places } from '../../lib/data';
+import { locationId } from '../../lib/locations';
 
 test.beforeEach(async ({ page }) => {
   await page.route('https://tiles.openfreemap.org/**', (r) => r.abort());
@@ -30,7 +32,7 @@ test('saved places are grouped by city and legacy trips merge within each region
   await expect(page.getByRole('combobox', { name: 'Регион путешествия' })).toBeEnabled();
   await page.getByRole('button', { name: /^Сохранённое/ }).click();
   const groups = page.getByRole('navigation', { name: 'Сохранённое по локациям' });
-  await expect(groups.getByRole('button')).toHaveCount(3);
+  await expect(groups.getByRole('button')).toHaveCount(4);
   await groups.getByRole('button', { name: /Коломна.*1 мест/ }).click();
   await expect(
     page.getByRole('button', { name: 'Открыть Стены Коломенского кремля', exact: true }),
@@ -43,19 +45,18 @@ test('saved places are grouped by city and legacy trips merge within each region
     .filter({ visible: true })
     .first()
     .click();
+  await expect(page.locator('.trip-city-card')).toHaveCount(3);
+  await page.getByRole('link', { name: 'Составить маршрут: Коломна', exact: true }).click();
   const planner = page.getByRole('main', { name: 'Создание поездки' });
   await expect(planner.locator('.stops > li')).toHaveCount(1);
-  await expect(planner.locator('.stops')).toContainText('Стены Коломенского кремля');
-  const chooser = planner.getByRole('combobox', { name: 'Регион поездки' });
-  await chooser.selectOption('karelia');
-  await expect(planner.locator('.stops > li')).toHaveCount(2);
+  const chooser = planner.getByRole('combobox', { name: 'Город поездки' });
+  await chooser.selectOption(locationId(places.find((p) => p.id === 'suisaari')!));
+  await expect(planner.locator('.stops > li')).toHaveCount(1);
   await expect(planner.locator('.stops')).toContainText('Суйсари');
-  await expect(planner.locator('.stops')).toContainText('Сюскюянйоки');
   await page.reload();
-  await expect(planner.locator('select[aria-label="Регион поездки"] option:checked')).toHaveText(
-    'Карелия',
-  );
-  await expect(planner.locator('.stops')).toContainText('Сюскюянйоки');
+  await expect(planner.locator('.stops')).toContainText('Суйсари');
+  await page.getByRole('button', { name: 'Все города и добавленные места', exact: true }).click();
+  await expect(page.locator('.trip-city-card')).toHaveCount(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 
@@ -83,7 +84,7 @@ test('one-day timeline includes visits, recalculates order, and adds at most thr
   });
   await page.goto('/');
   await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
-  if (isMobile) await page.getByRole('button', { name: 'Лента', exact: true }).click();
+  if (isMobile) await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   for (const name of ['Стены Коломенского кремля', 'Улица Лажечникова']) {
     await page.getByRole('button', { name: `Сохранить ${name}`, exact: true }).click();
   }
@@ -92,6 +93,9 @@ test('one-day timeline includes visits, recalculates order, and adds at most thr
     .filter({ visible: true })
     .first()
     .click();
+  await page
+    .getByRole('combobox', { name: 'Выбрать город поездки' })
+    .selectOption(locationId(places.find((p) => p.id === 'kolomna-kremlin')!));
   const planner = page.getByRole('main', { name: 'Создание поездки' });
   for (const name of ['Стены Коломенского кремля', 'Улица Лажечникова'])
     await planner

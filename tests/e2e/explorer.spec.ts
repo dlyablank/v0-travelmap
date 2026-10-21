@@ -27,18 +27,14 @@ test('explore, filter, save, build route and retain trip after reload', async ({
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
   await expect(page.locator('[data-testid=map] canvas')).toBeVisible();
-  await expect(page.locator('.video-marker,.map-cluster').first()).toBeVisible();
-  if (isMobile)
-    await page.locator('.mobile-tools').getByRole('button', { name: 'Лента', exact: true }).click();
+  await expect(page.locator('[data-map-marker-visible="true"]').first()).toBeVisible();
+  if (isMobile) await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await page.getByRole('button', { name: 'Открыть Мраморный каньон', exact: true }).click();
-  if (isMobile)
-    await page.locator('.mobile-tools').getByRole('button', { name: 'Карта', exact: true }).click();
   await expect(page.locator('.active-preview h2')).toHaveText('Мраморный каньон');
   await page.getByRole('button', { name: 'Следующее место' }).click();
   await expect(page.locator('.active-preview h2')).toHaveText('Ладожские шхеры');
   await page.getByRole('button', { name: 'Закрыть место' }).click();
-  if (isMobile)
-    await page.locator('.mobile-tools').getByRole('button', { name: 'Лента', exact: true }).click();
+  if (isMobile) await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await page.getByRole('button', { name: 'Сохранить Мраморный каньон', exact: true }).click();
   await page
     .getByRole('button', { name: 'Добавить в поездку Мраморный каньон', exact: true })
@@ -47,19 +43,22 @@ test('explore, filter, save, build route and retain trip after reload', async ({
     .getByRole('button', { name: 'Добавить в поездку Водопады Ахвенкоски', exact: true })
     .click();
   await page.reload();
-  if (isMobile)
-    await page.locator('.mobile-tools').getByRole('button', { name: 'Лента', exact: true }).click();
+  if (isMobile) await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Убрать из поездки Мраморный каньон', exact: true }),
   ).toBeVisible();
   await page.locator('.category-tabs').getByRole('button', { name: 'Кафе', exact: true }).click();
   await expect(page.getByText('Пока ничего не найдено')).toBeVisible();
-  await page.getByRole('button', { name: 'Показать все места', exact: true }).click();
+  await page
+    .locator('.empty-state')
+    .getByRole('button', { name: 'Показать все места', exact: true })
+    .click();
   await page
     .getByRole('button', { name: /Моя поездка/ })
     .filter({ visible: true })
     .first()
     .click();
+  await page.getByRole('link', { name: 'Составить маршрут: Рускеала', exact: true }).click();
   await expect(page.locator('.stops li')).toHaveCount(2);
   await page.getByRole('button', { name: 'Собрать маршрут', exact: true }).click();
   await expect(page.locator('.route-summary')).toBeVisible({ timeout: 20000 });
@@ -81,11 +80,7 @@ test('upload an owned MP4, persist a new geolocated point, and play only the act
   request,
 }) => {
   await page.goto('/');
-  if (isMobile)
-    await page
-      .locator('.mobile-tools')
-      .getByRole('button', { name: 'Добавить видео', exact: true })
-      .click();
+  if (isMobile) await page.getByRole('button', { name: 'Добавить видео', exact: true }).click();
   else await page.getByRole('button', { name: 'Добавить видео', exact: true }).click();
   await page.getByRole('button', { name: 'Свой файл', exact: true }).click();
   await page.getByLabel('Видеофайл').setInputFiles(video);

@@ -12,11 +12,12 @@ import {
   Play,
   Pause,
 } from 'lucide-react';
+import { addMapMarkerActions, syncMapMarkerTrip } from '@/lib/map-marker-actions';
 import { createMapVideoPreview } from '@/lib/map-video-preview';
 import { selectMapMarkers, mapVideoCamera, mapMarkerSize } from '@/lib/map-video-layout';
 import type { Place } from '@/lib/types';
 import type { ExplorerMapProps } from './explorer-map-types';
-import { inRegion } from '@/lib/regions';
+import { inRegion, regionAtCenter } from '@/lib/regions';
 const localStyle: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -57,6 +58,10 @@ export default function ExplorerMap({
   onReady,
   onNeedVideos,
   previewsVisible = true,
+  tripIds = [],
+  onTripToggle,
+  focusRequest,
+  onRegionChange,
 }: ExplorerMapProps) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -78,16 +83,55 @@ export default function ExplorerMap({
     playbackState.current = { active, autoplay, previewsVisible, pickMode, route };
     syncVideoState.current?.();
   }, [active, autoplay, previewsVisible, pickMode, route]);
-  const callbacks = useRef({ onSelect, onPick, pickMode, places, region, onReady, onNeedVideos });
+  const callbacks = useRef({
+    onSelect,
+    onPick,
+    pickMode,
+    places,
+    region,
+    onReady,
+    onNeedVideos,
+    tripIds,
+    onTripToggle,
+    focusRequest,
+    onRegionChange,
+  });
   useEffect(() => {
-    callbacks.current = { onSelect, onPick, pickMode, places, region, onReady, onNeedVideos };
-  }, [onSelect, onPick, pickMode, places, region, onReady, onNeedVideos]);
+    callbacks.current = {
+      onSelect,
+      onPick,
+      pickMode,
+      places,
+      region,
+      onReady,
+      onNeedVideos,
+      tripIds,
+      onTripToggle,
+      focusRequest,
+      onRegionChange,
+    };
+  }, [
+    onSelect,
+    onPick,
+    pickMode,
+    places,
+    region,
+    onReady,
+    onNeedVideos,
+    tripIds,
+    onTripToggle,
+    focusRequest,
+    onRegionChange,
+  ]);
+  useEffect(() => {
+    syncVideoState.current?.();
+  }, [tripIds]);
   useEffect(() => {
     updatePlaces.current?.();
   }, [places]);
   useEffect(() => {
     focusRegion.current?.();
-  }, [region]);
+  }, [region, focusRequest]);
   useEffect(() => {
     if (!el.current) return;
     const region = initialRegion.current;
@@ -178,6 +222,7 @@ export default function ExplorerMap({
       navigator as Navigator & { connection?: EventTarget & { saveData?: boolean } }
     ).connection;
     let selectedPlaces: string[] = [];
+    let framing = false;
     function syncPreviews() {
       const bounds = m.getContainer().getBoundingClientRect();
       if (!bounds.width || !bounds.height) {
@@ -230,6 +275,7 @@ export default function ExplorerMap({
       for (const [id, record] of records) {
         const element = record.marker.getElement();
         element.classList.toggle('is-active', state.active?.id === id);
+        syncMapMarkerTrip(element, callbacks.current.tripIds.includes(id));
         element.style.display = visible.has(id) ? '' : 'none';
         element.dataset.mapMarkerVisible = String(visible.has(id));
         if (element.classList.contains('priority-video')) {
@@ -299,9 +345,14 @@ export default function ExplorerMap({
       const width = m.getContainer().clientWidth,
         height = m.getContainer().clientHeight;
       const region = callbacks.current.region;
-      if (framedRegion.current !== region.id && width > 0 && height > 0) {
+      const request =
+        callbacks.current.focusRequest === undefined
+          ? region.id
+          : String(callbacks.current.focusRequest);
+      if (framedRegion.current !== request && width > 0 && height > 0) {
+        framing = true;
         const firstFrame = framedRegion.current === null;
-        framedRegion.current = region.id;
+        framedRegion.current = request;
         const state = playbackState.current;
         const videos = places.filter((p) => p.video && inRegion(p, region));
         if (!state.active && !state.route && !state.pickMode) {
@@ -326,6 +377,7 @@ export default function ExplorerMap({
           else m.flyTo({ ...view, duration: 1000 });
         }
       }
+      framing = false;
       const seen = new Set<string>();
       for (const f of [...m.querySourceFeatures(sourceId), ...videoFeatures]) {
         if (f.geometry.type !== 'Point') continue;
@@ -338,7 +390,7 @@ export default function ExplorerMap({
           records.get(key)!.marker.setLngLat(coords);
           continue;
         }
-        const btn = document.createElement('button');
+        const btn = document.createElement(props.cluster ? 'button' : 'div');
         let preview: ReturnType<typeof createMapVideoPreview> | undefined;
         if (props.cluster) {
           btn.className = 'map-cluster';
@@ -385,6 +437,7 @@ export default function ExplorerMap({
           const name = document.createElement('b');
           name.textContent = p.name;
           btn.append(name);
+          addMapMarkerActions(btn, p, () => callbacks.current.onTripToggle?.(p.id));
           if (p.video?.playbackUrl) {
             btn.classList.add('has-video');
             preview = createMapVideoPreview(btn, p.video.previewUrl || p.video.playbackUrl);
@@ -428,7 +481,13 @@ export default function ExplorerMap({
     m.on('style.load', styleLoaded);
     m.on('sourcedata', refresh);
     function settled() {
+      const wasFraming = framing;
       refresh();
+      if (!wasFraming) {
+        const center = m.getCenter();
+        const next = regionAtCenter([center.lng, center.lat], callbacks.current.region.id);
+        if (next.id !== callbacks.current.region.id) callbacks.current.onRegionChange?.(next.id);
+      }
       const state = playbackState.current;
       if (
         selectedVideos.current.length < 5 &&
@@ -541,11 +600,12 @@ export default function ExplorerMap({
       <div ref={el} className="map-canvas" data-testid="map" />
       <button
         className="map-video-toggle"
+        aria-label="Видео на карте"
         aria-pressed={autoplay}
         onClick={() => setAutoplay(!autoplay)}
       >
         {autoplay ? <Pause size={14} /> : <Play size={14} />}
-        Видео на карте
+        <span>Видео на карте</span>
       </button>
       {local && (
         <div className="overview-label">

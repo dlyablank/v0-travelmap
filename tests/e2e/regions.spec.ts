@@ -11,19 +11,19 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   await expect(chooser).toHaveValue('karelia');
   await expect(chooser).toBeEnabled();
   if (info.project.name === 'mobile')
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
+    await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await page
     .getByRole('button', { name: 'Добавить в поездку Суйсари на острове', exact: true })
     .click();
   await chooser.selectOption('kolomna');
-  await expect(page.getByRole('heading', { name: 'Выходные в Коломне' })).toBeVisible();
-  await expect(page.locator('.region-caption')).toContainText('9 мест · 7 видео');
+  await expect(page.getByRole('heading', { name: 'Места для вашей поездки' })).toBeVisible();
+  await expect(page.locator('.region-caption')).toContainText('38 мест · 14 видео');
   await expect(page.getByRole('region', { name: 'Выбранные остановки' })).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Открыть Суйсари на острове', exact: true }),
-  ).toHaveCount(0);
+  ).toHaveCount(1);
   if (info.project.name === 'mobile')
-    await page.getByRole('button', { name: 'Карта', exact: true }).click();
+    await page.getByRole('button', { name: 'Weekend Explorer — главная', exact: true }).click();
   await expect(page.locator('.priority-video')).toHaveCount(14);
   await expect
     .poll(() => page.locator('.priority-video[data-map-video-visible="true"]').count())
@@ -58,7 +58,7 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
     )
     .toBe(true);
   if (info.project.name === 'mobile')
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
+    await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await page
     .getByRole('button', { name: 'Открыть Стены Коломенского кремля', exact: true })
     .click();
@@ -85,17 +85,16 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   await expect(reel.getByRole('heading', { name: 'Улица Лажечникова' })).toBeVisible();
   await reel.getByRole('button', { name: 'Закрыть видеоленту' }).click();
   await page.reload();
-  await expect(chooser).toHaveValue('kolomna');
   if (info.project.name === 'mobile')
-    await page.getByRole('button', { name: 'Лента', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Выбранные остановки' })).toContainText(
-    'Стены Коломенского кремля',
-  );
-  await chooser.selectOption('karelia');
-  await expect(page.getByRole('region', { name: 'Выбранные остановки' })).toContainText('Суйсари');
-  await expect(page.locator('.region-caption')).toContainText('29 мест · 7 видео');
-  await chooser.selectOption('kolomna');
-  await page.getByRole('button', { name: 'Собрать поездку' }).click();
+    await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
+  for (const name of ['Стены Коломенского кремля', 'Суйсари на острове'])
+    await expect(
+      page.getByRole('button', { name: `Убрать из поездки ${name}`, exact: true }),
+    ).toBeVisible();
+  await expect(page.locator('.selected-stops')).toHaveCount(0);
+  await page.getByRole('button', { name: /Моя поездка/ }).click();
+  await expect(page.locator('.trip-city-card')).toHaveCount(2);
+  await page.getByRole('link', { name: 'Составить маршрут: Коломна', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Обложка поездки' })).toContainText(
     'Коломна и окрестности',
   );
@@ -137,7 +136,6 @@ test('one persistent map contains both regions and the selector only changes its
     await expect
       .poll(() => page.locator(`.video-marker${prefix}[data-map-marker-visible="true"]`).count())
       .toBeGreaterThan(0);
-  await expect(chooser).toHaveValue('kolomna');
   await expect(canvas).toHaveAttribute('data-instance', 'original');
   const otherRegion = page
     .locator('.video-marker:not([data-place-id^="kolomna-"])[data-map-marker-visible="true"]')
@@ -151,5 +149,4 @@ test('one persistent map contains both regions and the selector only changes its
   const nextPlace = neighbours[(neighbours.findIndex((p) => p.id === id) + 1) % neighbours.length];
   await page.getByRole('button', { name: 'Следующее место', exact: true }).click();
   await expect(page.locator('.active-preview h2')).toHaveText(nextPlace.name);
-  await expect(chooser).toHaveValue('kolomna');
 });

@@ -4,15 +4,16 @@ import type { Map as MapGLMap, HtmlMarker, Polyline } from '@2gis/mapgl/types';
 import { Minus, Plus, LocateFixed, Navigation, Layers, Play, Pause } from 'lucide-react';
 import { loadMapGL } from '@/lib/mapgl-loader';
 import { clusterMapPlaces, mapBounds } from '@/lib/mapgl-places';
+import { addMapMarkerActions, syncMapMarkerTrip } from '@/lib/map-marker-actions';
 import { createMapVideoPreview } from '@/lib/map-video-preview';
 import { selectMapMarkers, mapMarkerSize } from '@/lib/map-video-layout';
-import { inRegion } from '@/lib/regions';
+import { inRegion, regionAtCenter } from '@/lib/regions';
 import type { ExplorerMapProps } from './explorer-map-types';
 
 type SDK = Awaited<ReturnType<typeof loadMapGL>>;
 type MarkerRecord = {
   marker: HtmlMarker;
-  element: HTMLButtonElement;
+  element: HTMLElement;
   video: boolean;
   preview?: ReturnType<typeof createMapVideoPreview>;
 };
@@ -53,13 +54,13 @@ export default function TwoGisMap(
       pick: props.pickMode,
     };
     sync.current?.();
-  }, [autoplay, props.active, props.previewsVisible, props.pickMode]);
+  }, [autoplay, props.active, props.previewsVisible, props.pickMode, props.tripIds]);
   useEffect(() => {
     update.current?.();
   }, [props.places]);
   useEffect(() => {
     focus.current?.();
-  }, [props.region]);
+  }, [props.region, props.focusRequest]);
 
   useEffect(() => {
     let disposed = false;
@@ -123,6 +124,7 @@ export default function TwoGisMap(
     const records = new Map<string, MarkerRecord>();
     let clusters = clusterMapPlaces(callbacks.current.places);
     let frame = 0;
+    let framing = false;
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
     const connection = (
       navigator as Navigator & { connection?: EventTarget & { saveData?: boolean } }
@@ -183,6 +185,7 @@ export default function TwoGisMap(
         record.element.style.display = shown ? '' : 'none';
         record.element.dataset.mapMarkerVisible = String(shown);
         record.element.classList.toggle('is-active', state.active?.id === id);
+        syncMapMarkerTrip(record.element, callbacks.current.tripIds?.includes(id) || false);
         const root = record.marker.getContent();
         root.style.visibility = shown ? 'visible' : 'hidden';
         root.style.pointerEvents = shown ? 'auto' : 'none';
@@ -197,10 +200,13 @@ export default function TwoGisMap(
 
     function frameRegion() {
       const { region, places, active, route, pickMode } = callbacks.current;
-      if (!element.clientWidth || !element.clientHeight || framedRegion.current === region.id)
-        return;
+      const request =
+        callbacks.current.focusRequest === undefined
+          ? region.id
+          : String(callbacks.current.focusRequest);
+      if (!element.clientWidth || !element.clientHeight || framedRegion.current === request) return;
       const first = framedRegion.current === null;
-      framedRegion.current = region.id;
+      framedRegion.current = request;
       if (active || route || pickMode) return;
       selected.current = { videos: [], places: [] };
       const regionPlaces = places.filter((place) => inRegion(place, region));
@@ -208,6 +214,7 @@ export default function TwoGisMap(
       const bounds = mapBounds(
         (videos.length ? videos : regionPlaces).map((p) => [p.longitude, p.latitude]),
       );
+      framing = true;
       const animation = { animate: !first && !motion.matches, duration: 1000 };
       if (bounds) {
         map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 }, { animate: false });
@@ -225,6 +232,7 @@ export default function TwoGisMap(
         map.setCenter(region.center, animation);
         map.setZoom(region.zoom, animation);
       }
+      framing = false;
     }
 
     function refresh() {
@@ -262,8 +270,8 @@ export default function TwoGisMap(
         }
         const place = cluster ? undefined : byId.get(id);
         if (!cluster && !place) continue;
-        const button = document.createElement('button');
-        button.type = 'button';
+        const button = document.createElement(cluster ? 'button' : 'div');
+        if (button instanceof HTMLButtonElement) button.type = 'button';
         button.style.display = 'none';
         const video = !!place?.video;
         button.className = cluster
@@ -297,6 +305,7 @@ export default function TwoGisMap(
           const name = document.createElement('b');
           name.textContent = place.name;
           button.append(name);
+          addMapMarkerActions(button, place, () => callbacks.current.onTripToggle?.(place.id));
           if (place.video?.playbackUrl) {
             button.classList.add('has-video');
             preview = createMapVideoPreview(
@@ -347,7 +356,13 @@ export default function TwoGisMap(
         });
     }
     function settled() {
+      const wasFraming = framing;
       refresh();
+      if (!wasFraming) {
+        const center = map.getCenter();
+        const next = regionAtCenter([center[0], center[1]], callbacks.current.region.id);
+        if (next.id !== callbacks.current.region.id) callbacks.current.onRegionChange?.(next.id);
+      }
       const state = playback.current;
       if (selected.current.videos.length < 5 && state.visible && !state.active && !state.pick)
         callbacks.current.onNeedVideos?.();
@@ -459,10 +474,11 @@ export default function TwoGisMap(
       <div ref={container} className="map-canvas" data-testid="map" />
       <button
         className="map-video-toggle"
+        aria-label="Видео на карте"
         aria-pressed={autoplay}
         onClick={() => setAutoplay(!autoplay)}
       >
-        {autoplay ? <Pause size={14} /> : <Play size={14} />} Видео на карте
+        {autoplay ? <Pause size={14} /> : <Play size={14} />} <span>Видео на карте</span>
       </button>
       <div className="overview-label">2ГИС{!session ? ' · загрузка…' : ''}</div>
       <div className="map-region">
