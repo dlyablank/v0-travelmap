@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { yandexRoute, yandexRouteParts } from '@/lib/yandex-route';
+import { dgisRoute, dgisRouteParts } from '@/lib/dgis-route';
 import {
   ArrowLeft,
   Bus,
@@ -27,11 +28,52 @@ import { regions, getRegion } from '@/lib/regions';
 import { cityTravelNote } from '@/lib/podmoskovye-data';
 import { dayPlan, defaultDay, clockLabel } from '@/lib/day-plan';
 import { optimizeStops } from '@/lib/routing';
+import { weekendVariants, type WeekendVariant } from '@/lib/weekend-plan';
 import { distanceLabel, timeLabel } from '@/lib/utils';
 import { PlaceImage } from './place-image';
 import { Button } from './ui/button';
 import { TripCover } from './trip-cover';
 import { TripRecommendations } from './trip-recommendations';
+import { WeekendVariants } from './weekend-variants';
+import { TripHotels } from './trip-hotels';
+import { TripMeals } from './trip-meals';
+import { TripDayReport } from './trip-day-report';
+
+function TransferNav({
+  from,
+  to,
+  mode,
+}: {
+  from: Place;
+  to: Place;
+  mode: 'car' | 'walk' | 'transit';
+}) {
+  return (
+    <div className="transfer-nav-links">
+      <a
+        className="transfer-link"
+        href={yandexRoute([from, to], mode)}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {mode === 'transit'
+          ? 'Посмотреть транспорт и пересадки в Яндекс Картах'
+          : 'Уточнить путь в Яндекс Картах'}
+      </a>
+      <a
+        className="transfer-link"
+        href={dgisRoute([from, to], mode)}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {mode === 'transit'
+          ? 'Открыть общественный транспорт в 2GIS'
+          : 'Открыть путь в 2GIS'}
+      </a>
+    </div>
+  );
+}
+
 export function TripPanel({
   places,
   onClose,
@@ -62,6 +104,7 @@ export function TripPanel({
     saved,
     daySettings,
     setDaySettings,
+    setDays,
   } = useExplorer();
   const region = getRegion(regionId);
   const locationId = cityId || regionId;
@@ -86,26 +129,62 @@ export function TripPanel({
   const [feedback, setFeedback] = useState('');
   const [optimize, setOptimize] = useState(true);
   const [error, setError] = useState('');
+  const [variants, setVariants] = useState<WeekendVariant[]>([]);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const pending = useRef<AbortController | null>(null);
   const requestKey = useRef('');
   const auto = useRef(false);
+  const userOrderRef = useRef<Place[]>([]);
+
+  const selectedVariant =
+    variants.find((v) => v.id === selectedVariantId) || variants[0] || null;
+
   useEffect(() => () => pending.current?.abort(), []);
+
+  useEffect(() => {
+    if (!selectedVariant) return;
+    setDays(selectedVariant.durationDays);
+  }, [selectedVariant, setDays]);
+
+  useEffect(() => {
+    if (!activeRoute || stops.length < 2) return;
+    const nextVariants = weekendVariants(stops, activeRoute, settings, {
+      userOrder: userOrderRef.current.length ? userOrderRef.current : stops,
+    });
+    setVariants(nextVariants);
+    setSelectedVariantId((current) =>
+      current && nextVariants.some((v) => v.id === current)
+        ? current
+        : nextVariants[0]?.id || null,
+    );
+  }, [activeRoute, settings, stops]);
+
   const build = useCallback(
-    async (shouldOptimize = false) => {
+    async (
+      shouldOptimize = false,
+      forcedOrder?: Place[],
+      preferVariantId?: string,
+    ) => {
       if (stops.length < 2 || stops.length > 20 || plan.budget <= 0) {
         onRoute(null);
+        setVariants([]);
+        setSelectedVariantId(null);
         return;
       }
       pending.current?.abort();
       const controller = new AbortController();
       pending.current = controller;
-      const ordered = shouldOptimize ? optimizeStops(stops) : stops;
+      if (!forcedOrder) userOrderRef.current = stops;
+      const ordered =
+        forcedOrder || (shouldOptimize ? optimizeStops(stops) : stops);
       requestKey.current = `${locationId}:${mode}:${ordered.map((p) => p.id).join(',')}`;
       auto.current = true;
       setBusy(true);
       setError('');
       onRoute(null);
-      if (shouldOptimize)
+      if (
+        ordered.map((p) => p.id).join(',') !== stops.map((p) => p.id).join(',')
+      )
         reorder(
           ordered.map((p) => p.id),
           trip.filter((id) => !stops.some((p) => p.id === id)),
@@ -129,8 +208,25 @@ export function TripPanel({
           state.regionId === regionId &&
           state.transportMode === mode &&
           state.trip.join(',') === expectedTrip
-        )
-          onRoute({ ...data, stopIds: ordered.map((p) => p.id), mode, locationId });
+        ) {
+          const nextRoute: RouteResult = {
+            ...data,
+            stopIds: ordered.map((p) => p.id),
+            mode,
+            locationId,
+          };
+          onRoute(nextRoute);
+          const nextVariants = weekendVariants(ordered, nextRoute, settings, {
+            userOrder: userOrderRef.current,
+          });
+          setVariants(nextVariants);
+          setSelectedVariantId(
+            (preferVariantId &&
+              nextVariants.find((v) => v.id === preferVariantId)?.id) ||
+              nextVariants[0]?.id ||
+              null,
+          );
+        }
       } catch (e) {
         const state = useExplorer.getState();
         if (
@@ -144,8 +240,9 @@ export function TripPanel({
         if (pending.current === controller) setBusy(false);
       }
     },
-    [stops, mode, locationId, regionId, trip, onRoute, reorder, plan.budget],
+    [stops, mode, locationId, regionId, trip, onRoute, reorder, plan.budget, settings],
   );
+
   useEffect(() => {
     if (!auto.current || requestKey.current === signature) return;
     const timer = setTimeout(() => {
@@ -153,37 +250,58 @@ export function TripPanel({
     }, 350);
     return () => clearTimeout(timer);
   }, [signature, build]);
+
   function changeTrip(ids: string[]) {
     pending.current?.abort();
     onRoute(null);
+    setVariants([]);
+    setSelectedVariantId(null);
     setOptimize(false);
     reorder(
       ids,
       trip.filter((id) => !stops.some((p) => p.id === id)),
     );
   }
+
   function move(index: number, delta: number) {
     const ids = stops.map((p) => p.id);
     [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
     changeTrip(ids);
   }
+
   function chooseLocation(id: string) {
     pending.current?.abort();
     onRoute(null);
+    setVariants([]);
+    setSelectedVariantId(null);
     auto.current = false;
     setBusy(false);
     setError('');
     setRegion(id);
   }
+
+  function selectVariant(id: string) {
+    const variant = variants.find((v) => v.id === id);
+    if (!variant) return;
+    const sameOrder =
+      variant.order.map((p) => p.id).join(',') === stops.map((p) => p.id).join(',');
+    if (sameOrder) {
+      setSelectedVariantId(id);
+      return;
+    }
+    void build(false, variant.order, variant.id);
+  }
+
   async function save() {
     setSaving(true);
+    const days = selectedVariant?.durationDays || 1;
     try {
       const response = await fetch('/api/trips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: `${destinationName} · один день`,
-          durationDays: 1,
+          title: `${destinationName} · ${days === 1 ? 'один день' : 'выходные'}`,
+          durationDays: days,
           transportMode: mode,
           stops: stops.map((p) => p.id),
         }),
@@ -200,6 +318,7 @@ export function TripPanel({
       setSaving(false);
     }
   }
+
   function download() {
     const blob = new Blob(
       [
@@ -208,12 +327,22 @@ export function TripPanel({
             title: destinationName,
             regionId,
             locationId,
-            durationDays: 1,
+            durationDays: selectedVariant?.durationDays || 1,
             transportMode: mode,
             settings: { start: settings.start, end: settings.end, visits: {} },
             stops,
             route: activeRoute,
             schedule: plan.entries,
+            weekendVariant: selectedVariant
+              ? {
+                  id: selectedVariant.id,
+                  title: selectedVariant.title,
+                  days: selectedVariant.days.map((d) => ({
+                    label: d.label,
+                    stopIds: d.stops.map((p) => p.id),
+                  })),
+                }
+              : null,
           },
           null,
           2,
@@ -228,17 +357,31 @@ export function TripPanel({
     anchor.click();
     URL.revokeObjectURL(url);
   }
+
   const savedHere = places.filter(
     (p) =>
       saved.includes(p.id) &&
       (cityId ? placeLocationId(p) === cityId : p.region === region.name) &&
       !trip.includes(p.id),
   );
+  const catalogPool = cityId ? places.filter((p) => placeLocationId(p) === cityId) : places;
+  const timelineStops = selectedVariant?.order.length ? selectedVariant.order : stops;
+  const timelinePlan = dayPlan(timelineStops, activeRoute, settings);
+  const durationDays = selectedVariant?.durationDays || 1;
+  const sourceLabel =
+    activeRoute?.source === 'dgis'
+      ? '2GIS'
+      : activeRoute?.source === 'osrm'
+        ? 'по дорогам'
+        : 'по прямой';
+
   return (
     <main className="trip-panel trip-page" aria-label="Создание поездки">
       <div className="panel-header">
         <div>
-          <div className="dialog-eyebrow">{destinationName.toUpperCase()} · ОДИН ХОРОШИЙ ДЕНЬ</div>
+          <div className="dialog-eyebrow">
+            {destinationName.toUpperCase()} · ВЫХОДНЫЕ
+          </div>
           <h2>
             Моя поездка<span>{stops.length}</span>
           </h2>
@@ -280,33 +423,30 @@ export function TripPanel({
             </span>
           </label>
         ) : (
-          <>
-            {' '}
-            <label className="trip-location-field">
-              <MapPin size={18} />
-              <span>
-                Регион поездки
-                <select
-                  aria-label="Регион поездки"
-                  value={locationId}
-                  onChange={(event) => chooseLocation(event.target.value)}
-                >
-                  {regions.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </span>
-            </label>
-          </>
+          <label className="trip-location-field">
+            <MapPin size={18} />
+            <span>
+              Регион поездки
+              <select
+                aria-label="Регион поездки"
+                value={locationId}
+                onChange={(event) => chooseLocation(event.target.value)}
+              >
+                {regions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </span>
+          </label>
         )}
         {onBackToCities && (
           <Button variant="outline" onClick={onBackToCities}>
             <ArrowLeft size={16} /> Все города и добавленные места
           </Button>
         )}
-        <TripCover stops={stops} days={1} mode={mode} route={activeRoute} />
+        <TripCover stops={stops} days={durationDays} mode={mode} route={activeRoute} />
         <div className="day-time-fields">
           <label>
             Начало дня
@@ -342,6 +482,8 @@ export function TripPanel({
             className={mode === 'car' ? 'selected' : ''}
             onClick={() => {
               onRoute(null);
+              setVariants([]);
+              setSelectedVariantId(null);
               setMode('car');
             }}
           >
@@ -353,6 +495,8 @@ export function TripPanel({
             className={mode === 'walk' ? 'selected' : ''}
             onClick={() => {
               onRoute(null);
+              setVariants([]);
+              setSelectedVariantId(null);
               setMode('walk');
             }}
           >
@@ -365,6 +509,8 @@ export function TripPanel({
           aria-pressed={mode === 'transit'}
           onClick={() => {
             onRoute(null);
+            setVariants([]);
+            setSelectedVariantId(null);
             setMode('transit');
           }}
         >
@@ -381,6 +527,8 @@ export function TripPanel({
                 key={p.id}
                 onClick={() => {
                   onRoute(null);
+                  setVariants([]);
+                  setSelectedVariantId(null);
                   toggleTrip(p.id);
                 }}
                 aria-label={`Добавить сохранённое: ${p.name}`}
@@ -418,7 +566,7 @@ export function TripPanel({
               Старт: {stops[0]?.name} · Финиш: {stops.at(-1)?.name}
             </p>
             <ol className="stops day-timeline" aria-label="План дня">
-              {plan.entries.map((entry, index) => (
+              {timelinePlan.entries.map((entry, index) => (
                 <li key={entry.place.id}>
                   {index > 0 && (
                     <div className="timeline-transfer">
@@ -436,13 +584,14 @@ export function TripPanel({
                             : mode === 'transit'
                               ? 'Общественным транспортом'
                               : 'Пешком'}
-                          : {stops[index - 1].name} → {entry.place.name}
+                          : {timelineStops[index - 1].name} → {entry.place.name}
                         </strong>
                         <br />
                         {entry.leg
                           ? `${distanceLabel(entry.leg.distance)} · ${entry.leg.duration != null ? timeLabel(entry.leg.duration) : 'время не рассчитано'}`
                           : 'Переезд будет рассчитан'}
                         {activeRoute?.source === 'straight' && ' · по прямой'}
+                        {activeRoute?.source === 'dgis' && ' · 2GIS'}
                         {!!entry.leg?.instructions?.length && (
                           <ol className="transfer-instructions">
                             {entry.leg.instructions.map((step, i) => (
@@ -454,16 +603,11 @@ export function TripPanel({
                           </ol>
                         )}
                         {activeRoute && (
-                          <a
-                            className="transfer-link"
-                            href={yandexRoute([stops[index - 1], entry.place], mode)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {mode === 'transit'
-                              ? 'Посмотреть транспорт и пересадки в Яндекс Картах'
-                              : 'Уточнить путь в Яндекс Картах'}
-                          </a>
+                          <TransferNav
+                            from={timelineStops[index - 1]}
+                            to={entry.place}
+                            mode={mode}
+                          />
                         )}
                       </div>
                     </div>
@@ -526,51 +670,101 @@ export function TripPanel({
               Предложить порядок по близости
             </label>
             <p className="small-note">
-              Первая остановка остаётся стартом. Предложенный порядок можно изменить.
+              Первая остановка остаётся стартом. Оптимизация помогает уложить выходные; ваш порядок
+              сохраняется как один из вариантов после сборки.
             </p>
+            {activeRoute && variants.length > 0 && (
+              <WeekendVariants
+                variants={variants}
+                selectedId={selectedVariantId}
+                onSelect={selectVariant}
+              />
+            )}
+            {activeRoute && selectedVariant && (
+              <>
+                {selectedVariant.days.map((day) => (
+                  <section
+                    key={day.dayIndex}
+                    className="weekend-day-block"
+                    aria-label={day.label}
+                  >
+                    <div className="day-section-title">
+                      <Clock size={17} />
+                      <h3>{day.label}</h3>
+                    </div>
+                    <p className="trip-hint">
+                      {day.stops.map((p) => p.name).join(' → ')}
+                      {day.overflow > 0
+                        ? ` · не умещается примерно на ${timeLabel(day.overflow * 60)}`
+                        : ''}
+                    </p>
+                    <TripMeals dayStops={day.stops} catalogPlaces={catalogPool} />
+                  </section>
+                ))}
+                {selectedVariant.overnight && (
+                  <TripHotels eveningPlace={selectedVariant.eveningPlace} />
+                )}
+                <TripDayReport days={selectedVariant.days} degraded={selectedVariant.degraded} />
+              </>
+            )}
             {activeRoute && (
               <section className="route-summary" aria-label="Итоги дня">
                 <div className="summary-title">
-                  {activeRoute.source === 'osrm' ? 'Маршрут собран' : 'Предварительный план'}
+                  {activeRoute.source === 'straight'
+                    ? 'Предварительный план'
+                    : 'Маршрут собран'}
                 </div>
                 <div className="route-stats">
                   <span>
                     <MapPin size={15} />
                     <b>{distanceLabel(activeRoute.distance)}</b>
-                    <small>{activeRoute.source === 'straight' ? 'по прямой' : 'по дорогам'}</small>
+                    <small>{sourceLabel}</small>
                   </span>
                   <span>
                     <Clock size={15} />
-                    <b>{plan.travel !== null ? timeLabel(plan.travel * 60) : 'Не рассчитано'}</b>
+                    <b>
+                      {timelinePlan.travel !== null
+                        ? timeLabel(timelinePlan.travel * 60)
+                        : 'Не рассчитано'}
+                    </b>
                     <small>в пути</small>
                   </span>
                 </div>
-                <p>{timeLabel(plan.visits * 60)} на остановки · один день.</p>
-                {plan.complete && (
+                <p>
+                  {timeLabel(timelinePlan.visits * 60)} на остановки ·{' '}
+                  {durationDays === 1 ? 'один день' : 'выходные, 2 дня'}.
+                </p>
+                {timelinePlan.complete && durationDays === 1 && (
                   <p className="day-finish">
-                    Финиш около <strong>{clockLabel(plan.finish)}</strong> · всего{' '}
-                    {timeLabel((plan.visits + (plan.travel || 0)) * 60)}
+                    Финиш около <strong>{clockLabel(timelinePlan.finish)}</strong> · всего{' '}
+                    {timeLabel((timelinePlan.visits + (timelinePlan.travel || 0)) * 60)}
                   </p>
                 )}
-                {plan.overflow > 0 && (
+                {selectedVariant?.fitStatus === 'overflow' && (
                   <p className="day-overflow" role="status">
-                    План длиннее вашего дня минимум на {timeLabel(plan.overflow * 60)}. Уберите
-                    остановку или измените границы дня.
+                    Даже за выходные при текущем окне дня не всё умещается. Уберите остановку или
+                    смените режим транспорта.
                   </p>
                 )}
-                {!plan.complete && (
+                {timelinePlan.overflow > 0 && durationDays === 1 && (
+                  <p className="day-overflow" role="status">
+                    План длиннее вашего дня минимум на {timeLabel(timelinePlan.overflow * 60)}.
+                    Выберите вариант на 2 дня или уберите остановку.
+                  </p>
+                )}
+                {!timelinePlan.complete && (
                   <p>
                     Расписание после первой остановки появится, когда будет известно время
-                    переездов.
+                    переездов. Дни можно разложить по длительности посещений.
                   </p>
                 )}
                 {activeRoute.message && <p className="route-warning">{activeRoute.message}</p>}
               </section>
             )}
-            {activeRoute && mode !== 'transit' && (
+            {activeRoute && (
               <TripRecommendations
                 stops={stops}
-                places={cityId ? places.filter((p) => placeLocationId(p) === cityId) : places}
+                places={catalogPool}
                 route={activeRoute}
                 mode={mode}
                 onAdd={(place, index) => {
@@ -602,20 +796,36 @@ export function TripPanel({
             </div>
             {activeRoute && stops.length > 10 && (
               <p className="trip-hint">
-                Яндекс Карты принимают до 10 точек за один раз. Маршрут разделён на последовательные
-                части с общей остановкой на границе. Все места сохранены.
+                Яндекс Карты и 2GIS принимают ограниченное число точек за раз. Маршрут разделён на
+                последовательные части с общей остановкой на границе. Все места сохранены.
               </p>
             )}
             {activeRoute &&
               yandexRouteParts(stops, mode).map((href, index, parts) => (
                 <a
-                  key={href}
+                  key={`ya-${href}`}
                   className="navigation-link"
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   Маршрут в Яндекс Картах
+                  {parts.length > 1
+                    ? ` · часть ${index + 1}: остановки ${index * 9 + 1}–${Math.min(index * 9 + 10, stops.length)}`
+                    : ''}
+                  <ArrowUpRight size={16} />
+                </a>
+              ))}
+            {activeRoute &&
+              dgisRouteParts(stops, mode).map((href, index, parts) => (
+                <a
+                  key={`dg-${href}`}
+                  className="navigation-link navigation-link-dgis"
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Маршрут в 2GIS
                   {parts.length > 1
                     ? ` · часть ${index + 1}: остановки ${index * 9 + 1}–${Math.min(index * 9 + 10, stops.length)}`
                     : ''}
@@ -647,8 +857,8 @@ export function TripPanel({
           {stops.length < 2
             ? 'Добавьте минимум два места в этой локации'
             : busy
-              ? 'Учитываем переезды между остановками'
-              : 'Время посещений приблизительное, старт — с первой точки'}
+              ? 'Считаем путь и варианты выходных'
+              : 'Оптимизация порядка и 1–2 дня, чтобы успеть за выходные'}
         </small>
       </div>
     </main>

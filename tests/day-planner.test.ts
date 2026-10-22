@@ -121,8 +121,13 @@ describe('one-day plans', () => {
     const result = recommendationCandidates([a, b], [a, b, ...candidates], road, 'car');
     expect(result).toHaveLength(3);
     expect(result.every((r) => ['c', 'd', 'e', 'f'].includes(r.place.id))).toBe(true);
-    expect(
-      recommendationCandidates([a, b], candidates, { ...road, source: 'straight' }, 'car'),
-    ).toEqual([]);
+    const nearStraight = recommendationCandidates(
+      [a, b],
+      candidates,
+      { ...road, source: 'straight' },
+      'car',
+    );
+    expect(nearStraight.length).toBeGreaterThan(0);
+    expect(nearStraight.every((r) => r.place.id !== 'remote')).toBe(true);
   });
 });

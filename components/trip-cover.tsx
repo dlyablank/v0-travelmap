@@ -24,9 +24,9 @@ export function TripCover({
         <span className="trip-cover-status">
           {!route
             ? 'ВАША ИДЕЯ ПОЕЗДКИ'
-            : route.source === 'osrm'
-              ? 'МАРШРУТ СОБРАН'
-              : 'ПРЕДВАРИТЕЛЬНЫЙ ПЛАН'}
+            : route.source === 'straight'
+              ? 'ПРЕДВАРИТЕЛЬНЫЙ ПЛАН'
+              : 'МАРШРУТ СОБРАН'}
         </span>
         <h3>
           {cover.city}
@@ -43,7 +43,11 @@ export function TripCover({
             <span>
               <Route size={13} />
               {distanceLabel(route.distance)}
-              {route.source === 'straight' ? ' по прямой' : ' по дорогам'}
+              {route.source === 'straight'
+                ? ' по прямой'
+                : route.source === 'dgis'
+                  ? ' · 2GIS'
+                  : ' по дорогам'}
             </span>
             <span>
               <Clock size={13} />

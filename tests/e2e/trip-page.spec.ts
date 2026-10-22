@@ -7,6 +7,9 @@ const stops = places.filter((p) => p.city === 'Коломна').slice(0, 3);
 test.beforeEach(async ({ page }) => {
   await page.route('https://tiles.openfreemap.org/**', (r) => r.abort());
   await page.route('**/api/places', (r) => r.fulfill({ json: { places: [] } }));
+  await page.route('**/api/pois/**', (r) =>
+    r.fulfill({ json: { items: [], fallback: 'links', source: null } }),
+  );
 });
 
 async function seed(page: import('@playwright/test').Page, count = 3) {
@@ -68,8 +71,15 @@ test('direct trip page shows full walking instructions, current Yandex order, au
   await expect(planner.locator('.timeline-transfer').first()).toContainText(
     `Пешком: ${stops[0].name} → ${stops[1].name}`,
   );
+  await expect(planner.locator('.weekend-variants')).toBeVisible();
+  await expect(planner.locator('.weekend-variant-card').first()).toBeVisible();
   const navigation = planner.getByRole('link', { name: 'Маршрут в Яндекс Картах', exact: true });
   await expect(navigation).toHaveAttribute('href', /rtt=pd/);
+  await expect(planner.getByRole('link', { name: 'Маршрут в 2GIS', exact: true })).toHaveAttribute(
+    'href',
+    /2gis\.ru\/directions/,
+  );
+  await expect(planner.locator('.trip-day-report')).toBeVisible();
   await planner.getByRole('button', { name: `Поднять ${stops[1].name}`, exact: true }).click();
   await expect(planner.locator('.stops > li').first()).toContainText(stops[1].name);
   await expect(navigation).toBeVisible();
@@ -143,9 +153,11 @@ test('transit has pair links and unknown times; retry works and server save is h
   await expect(links).toHaveCount(2);
   await expect(links.first()).toHaveAttribute('href', /rtt=mt/);
   await expect(page.locator('.route-summary')).toContainText('Расписание после первой остановки');
-  await expect(page.locator('.trip-recommendations')).toHaveCount(0);
+  await expect(page.locator('.weekend-variants')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Открыть общественный транспорт в 2GIS' }).first()).toBeVisible();
+  await expect(page.locator('.trip-recommendations')).toBeVisible();
   await page.getByRole('button', { name: 'Сохранить на сервере', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('только в браузере');
+  await expect(page.locator('.trip-feedback')).toContainText('только в браузере');
   expect(savedMode).toBe('transit');
   await page.reload();
   await expect(

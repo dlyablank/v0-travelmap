@@ -50,6 +50,6 @@ export type RouteResult = {
     duration: number | null;
     instructions?: { text: string; distance: number }[];
   }[];
-  source: 'osrm' | 'straight';
+  source: 'osrm' | 'straight' | 'dgis';
   message?: string;
 };

@@ -2,9 +2,11 @@
 import { useEffect, useState } from 'react';
 import { Plus, MapPin, LoaderCircle } from 'lucide-react';
 import type { Place, RouteResult } from '@/lib/types';
-import { recommendationCandidates } from '@/lib/recommendations';
+import { isRoutedSource, recommendationCandidates } from '@/lib/recommendations';
 import { PlaceImage } from './place-image';
-type Suggestion = { place: Place; insertAt: number; detour: number };
+
+type Suggestion = { place: Place; insertAt: number; detour: number | null };
+
 export function TripRecommendations({
   stops,
   places,
@@ -18,13 +20,14 @@ export function TripRecommendations({
   mode: 'car' | 'walk' | 'transit';
   onAdd: (place: Place, index: number) => void;
 }) {
-  const key = `${stops.map((p) => p.id).join(',')}:${mode}:${route.distance}:${route.duration}`;
+  const key = `${stops.map((p) => p.id).join(',')}:${mode}:${route.distance}:${route.duration}:${route.source}`;
   const [result, setResult] = useState<{
     key: string;
     items: Suggestion[];
     loading: boolean;
     error: boolean;
   }>({ key: '', items: [], loading: true, error: false });
+
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
@@ -33,6 +36,18 @@ export function TripRecommendations({
       setResult({ key, items: [], loading: true, error: false });
       let failed = false;
       const candidates = recommendationCandidates(stops, places, route, mode);
+
+      if (!isRoutedSource(route.source) || mode === 'transit') {
+        if (!controller.signal.aborted)
+          setResult({
+            key,
+            items: candidates.map((c) => ({ ...c, detour: null })),
+            loading: false,
+            error: false,
+          });
+        return;
+      }
+
       const checked = await Promise.all(
         candidates.map(async (candidate) => {
           const ordered = [...stops];
@@ -49,7 +64,11 @@ export function TripRecommendations({
             });
             if (!response.ok) throw new Error('Route unavailable');
             const proposed: RouteResult = await response.json();
-            if (proposed.source !== 'osrm' || proposed.duration == null || route.duration == null) {
+            if (
+              !isRoutedSource(proposed.source) ||
+              proposed.duration == null ||
+              route.duration == null
+            ) {
               failed = true;
               return null;
             }
@@ -66,7 +85,7 @@ export function TripRecommendations({
           key,
           items: checked
             .filter((item): item is NonNullable<typeof item> => item !== null)
-            .sort((a, b) => a.detour - b.detour)
+            .sort((a, b) => (a.detour ?? 0) - (b.detour ?? 0))
             .slice(0, 3),
           loading: false,
           error: failed,
@@ -75,19 +94,25 @@ export function TripRecommendations({
     void load();
     return () => controller.abort();
   }, [key, stops, places, route, mode]);
+
   const current = result.key === key ? result : { items: [], loading: true, error: false };
-  if (route.source !== 'osrm') return null;
+  const geoNear = !isRoutedSource(route.source) || mode === 'transit';
+
   return (
     <section className="trip-recommendations" aria-label="Места по пути">
       <div className="day-section-title">
         <MapPin size={17} />
-        <h3>По пути к новым впечатлениям</h3>
+        <h3>{geoNear ? 'Можно заодно увидеть' : 'По пути к новым впечатлениям'}</h3>
       </div>
-      <p>До трёх видео в этом регионе. Добавляйте только то, что хочется увидеть.</p>
+      <p>
+        {geoNear
+          ? 'Только места из каталога рядом с вашими остановками. Без заявлений о дорожном объезде.'
+          : 'До трёх видео из каталога. Добавляйте только то, что хочется увидеть.'}
+      </p>
       {current.loading ? (
         <div role="status" className="recommendation-loading">
           <LoaderCircle size={16} className="spin" />
-          Проверяем время заезда…
+          {geoNear ? 'Ищем места рядом…' : 'Проверяем время заезда…'}
         </div>
       ) : current.items.length ? (
         current.items.map((item) => (
@@ -96,7 +121,9 @@ export function TripRecommendations({
             <div>
               <h4>{item.place.name}</h4>
               <p>
-                Заезд +{item.detour} мин · {item.place.visitMinutes} мин на месте
+                {item.detour != null
+                  ? `Заезд +${item.detour} мин · ${item.place.visitMinutes} мин на месте`
+                  : `Рядом с маршрутом · ${item.place.visitMinutes} мин на месте`}
               </p>
             </div>
             <button
@@ -112,7 +139,7 @@ export function TripRecommendations({
         <p className="small-note">
           {current.error
             ? 'Время заезда пока не удалось проверить. Попробуйте обновить маршрут позже.'
-            : 'Подходящих видео с небольшим заездом пока нет. Ваш маршрут уже собран.'}
+            : 'Подходящих видео рядом пока нет. Ваш маршрут уже собран.'}
         </p>
       )}
     </section>

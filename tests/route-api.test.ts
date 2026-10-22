@@ -19,7 +19,40 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe('routing API', () => {
+  it('prefers 2GIS when a server key is present', async () => {
+    vi.stubEnv('DGIS_API_KEY', 'test-key');
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          result: [
+            {
+              total_distance: 1500,
+              total_duration: 400,
+              maneuvers: [
+                {
+                  comment: 'Прямо',
+                  outcoming_path: {
+                    distance: 1500,
+                    duration: 400,
+                    geometry: { selection: 'LINESTRING(30.58 61.94, 30.62 61.91)' },
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetcher);
+    const data = await (await POST(request())).json();
+    expect(data.source).toBe('dgis');
+    expect(data.duration).toBe(400);
+    expect(String(fetcher.mock.calls[0][0])).toContain('routing.api.2gis.com');
+    expect(String(fetcher.mock.calls[0][0])).toContain('key=');
+  });
   it('never queries driving for public transit and keeps time unknown', async () => {
+    vi.stubEnv('DGIS_API_KEY', '');
+    vi.stubEnv('DGIS_KEY', '');
     const fetcher = vi.fn();
     vi.stubGlobal('fetch', fetcher);
     const data = await (await POST(request({ ...payload, mode: 'transit' }))).json();
@@ -29,6 +62,8 @@ describe('routing API', () => {
     expect(data.legs).toHaveLength(1);
   });
   it('uses walking provider steps and does not use driving as pedestrian fallback', async () => {
+    vi.stubEnv('DGIS_API_KEY', '');
+    vi.stubEnv('DGIS_KEY', '');
     vi.stubEnv('WALKING_ROUTING_URL', 'https://walking.test/route/v1/foot');
     const fetcher = vi
       .fn()
@@ -71,6 +106,8 @@ describe('routing API', () => {
     expect(fallback.duration).toBeNull();
   });
   it('returns road geometry and driving duration from OSRM', async () => {
+    vi.stubEnv('DGIS_API_KEY', '');
+    vi.stubEnv('DGIS_KEY', '');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -102,6 +139,8 @@ describe('routing API', () => {
     expect(data.coordinates).toHaveLength(2);
   });
   it('falls back explicitly when upstream is unavailable', async () => {
+    vi.stubEnv('DGIS_API_KEY', '');
+    vi.stubEnv('DGIS_KEY', '');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     const data = await (await POST(request())).json();
     expect(data.source).toBe('straight');
@@ -109,6 +148,8 @@ describe('routing API', () => {
     expect(data.message).toContain('по прямой');
   });
   it('does not represent distant road snapping as island access', async () => {
+    vi.stubEnv('DGIS_API_KEY', '');
+    vi.stubEnv('DGIS_KEY', '');
     vi.stubGlobal(
       'fetch',
       vi
