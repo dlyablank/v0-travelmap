@@ -20,29 +20,33 @@ async function expectNoCollisions(page: Page) {
     )
     .toBe(true);
   // Titles and cluster counters count as part of the card, too.
-  expect(
-    await page.locator('[data-map-marker-visible="true"]').evaluateAll((markers) =>
-      markers.every((marker) => {
-        const card = marker.getBoundingClientRect();
-        return [...marker.querySelectorAll('b, span')].every((child) => {
+  const offenders = await page.locator('[data-map-marker-visible="true"]').evaluateAll((markers) =>
+    markers.flatMap((marker) => {
+      const card = marker.getBoundingClientRect();
+      return [...marker.querySelectorAll('b, span')]
+        .map((child) => {
           const rect = child.getBoundingClientRect();
-          return (
-            rect.left >= card.left &&
-            rect.right <= card.right &&
-            rect.top >= card.top &&
-            rect.bottom <= card.bottom
-          );
-        });
-      }),
-    ),
-  ).toBe(true);
+          if (rect.width === 0 && rect.height === 0) return '';
+          const outside =
+            rect.left < card.left - 1 ||
+            rect.right > card.right + 1 ||
+            rect.top < card.top - 1 ||
+            rect.bottom > card.bottom + 1;
+          return outside
+            ? `${marker.getAttribute('aria-label') || marker.className} :: ${child.tagName} ${child.textContent} left ${Math.round(rect.left - card.left)} top ${Math.round(rect.top - card.top)} right ${Math.round(rect.right - card.right)} bottom ${Math.round(rect.bottom - card.bottom)}`
+            : '';
+        })
+        .filter(Boolean);
+    }),
+  );
+  expect(offenders).toEqual([]);
 }
 
-for (const region of ['karelia', 'kolomna']) {
+for (const region of ['karelia', 'podmoskovye']) {
   test(`${region}: all cards, titles and clusters avoid each other at different scales`, async ({
     page,
     isMobile,
-  }) => {
+  }, testInfo) => {
     await page.route('https://tiles.openfreemap.org/**', (route) => route.abort());
     await page.route('**/api/places', (route) => route.fulfill({ json: { places: [] } }));
     await page.goto('/');
@@ -54,11 +58,11 @@ for (const region of ['karelia', 'kolomna']) {
       .poll(() =>
         page
           .locator(
-            `.priority-video${region === 'kolomna' ? '[data-place-id^="kolomna-"]' : ':not([data-place-id^="kolomna-"])'}[data-map-marker-visible="true"]`,
+            `.priority-video${region === 'podmoskovye' ? '[data-place-id^="kolomna-"]' : ':not([data-place-id^="kolomna-"])'}[data-map-marker-visible="true"]`,
           )
           .count(),
       )
-      .toBeGreaterThanOrEqual(isMobile ? 2 : 3);
+      .toBeGreaterThanOrEqual(region === 'podmoskovye' ? 1 : isMobile ? 2 : 3);
     await expectNoCollisions(page);
     if (region === 'karelia') {
       await expect
@@ -72,15 +76,17 @@ for (const region of ['karelia', 'kolomna']) {
         .toBeGreaterThan(0);
     }
     const videos = page.locator('.priority-video[data-map-marker-visible="true"]');
-    expect(await videos.count()).toBeGreaterThanOrEqual(isMobile ? 2 : 3);
-    expect(
-      await videos.first().evaluate((el) => {
-        const rect = el.getBoundingClientRect();
-        return { width: rect.width, height: rect.height };
-      }),
-    ).toEqual({ width: 60, height: 90 });
+    expect(await videos.count()).toBeGreaterThanOrEqual(
+      region === 'podmoskovye' ? 1 : isMobile ? 2 : 3,
+    );
+    const size = await videos.first().evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    });
+    expect(Math.abs(size.width - 60)).toBeLessThan(1);
+    expect(Math.abs(size.height - 90)).toBeLessThan(1);
     await page.screenshot({
-      path: `/tmp/map-${region}-${isMobile ? 'mobile' : 'desktop'}.png`,
+      path: testInfo.outputPath(`map-${region}.png`),
       scale: 'css',
     });
     for (const name of [

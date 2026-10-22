@@ -32,18 +32,75 @@ describe('trip planning', () => {
     expect(youtubeId('https://youtube.com/shorts/abcdefghijk')).toBe('abcdefghijk');
     expect(youtubeId('https://youtube.com/shorts/bad')).toBeNull();
   });
-  it('contains unique geographic points in Karelia and Kolomna with seven videos per region', () => {
-    expect(places).toHaveLength(38);
-    expect(new Set(places.map((p) => p.id)).size).toBe(38);
+  it('contains unique points in Karelia and Podmoskovye, with Karelia still on seven videos', () => {
+    expect(places.length).toBeGreaterThan(38);
+    expect(new Set(places.map((p) => p.id)).size).toBe(places.length);
+    const karelia = places.filter((p) => p.region === 'Карелия');
+    expect(karelia.filter((p) => p.video)).toHaveLength(7);
     expect(
-      places.every((p) =>
-        p.region === 'Карелия'
-          ? p.latitude > 60 && p.latitude < 67 && p.longitude > 29 && p.longitude < 36
-          : p.latitude > 54.7 && p.latitude < 55.3 && p.longitude > 38.5 && p.longitude < 39,
+      karelia.every(
+        (p) => p.latitude > 60 && p.latitude < 67 && p.longitude > 29 && p.longitude < 36,
       ),
     ).toBe(true);
-    for (const region of ['Карелия', 'Коломна и окрестности']) {
-      expect(places.filter((p) => p.region === region && p.video)).toHaveLength(7);
+    const podmoskovye = places.filter((p) => p.region === 'Подмосковье');
+    expect(
+      podmoskovye.every(
+        (p) => p.latitude > 54.6 && p.latitude < 56.5 && p.longitude > 35.8 && p.longitude < 39.2,
+      ),
+    ).toBe(true);
+    for (const id of [
+      'kolomna-kremlin',
+      'kolomna-lazhechnikova',
+      'kolomna-zaytseva',
+      'kolomna-viewpoint',
+      'kolomna-pastila',
+      'kolomna-golutvin',
+      'kolomna-strelka',
+      'kolomna-bobrenevo',
+      'kolomna-zaraysk',
+    ])
+      expect(podmoskovye.some((p) => p.id === id)).toBe(true);
+    for (const id of [
+      'kolomna-kremlin',
+      'kolomna-lazhechnikova',
+      'kolomna-zaytseva',
+      'kolomna-viewpoint',
+      'kolomna-pastila',
+      'kolomna-golutvin',
+      'kolomna-strelka',
+    ])
+      expect(podmoskovye.find((p) => p.id === id)?.video).toBeTruthy();
+    for (const place of podmoskovye.filter((p) => !p.video)) {
+      expect(place.thumbnailUrl).toBe('/media/fallback.svg');
+      expect(place.imageCredit).toContain('видео пока нет');
+      expect(place.video?.credit?.rightsBasis).not.toBe('author-permission');
+    }
+    for (const city of [
+      'Коломна',
+      'Зарайск',
+      'Сергиев Посад',
+      'Звенигород',
+      'Серпухов',
+      'Дмитров',
+      'Истра',
+      'Верея',
+      'Клин',
+      'Можайск',
+    ]) {
+      const group = podmoskovye.filter((p) => p.city === city);
+      expect(group.length).toBeGreaterThanOrEqual(3);
+      expect(group.length).toBeLessThanOrEqual(city === 'Коломна' ? 8 : 5);
+      for (let i = 0; i < group.length; i += 1)
+        for (let j = i + 1; j < group.length; j += 1) {
+          expect(haversine(group[i], group[j])).toBeGreaterThan(30);
+          expect(haversine(group[i], group[j]) / 1000).toBeLessThan(30);
+        }
+    }
+    const moscow = { latitude: 55.7516212, longitude: 37.618122 };
+    for (const place of podmoskovye) {
+      const km = haversine(moscow, place) / 1000;
+      expect(km).toBeGreaterThan(20);
+      expect(km).toBeLessThan(220);
     }
   });
 });

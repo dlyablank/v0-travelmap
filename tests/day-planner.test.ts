@@ -95,10 +95,10 @@ describe('one-day plans', () => {
     useExplorer.getState().setDaySettings({ start: '10:00' });
     const elsewhere = locationId(place('c', 'Озёры'));
     useExplorer.getState().setLocation(elsewhere);
-    expect(useExplorer.getState().daySettings.kolomna.start).toBe('10:00');
+    expect(useExplorer.getState().daySettings.podmoskovye.start).toBe('10:00');
     useExplorer.getState().setRegion('karelia');
     useExplorer.getState().setDaySettings({ start: '08:00' });
-    expect(useExplorer.getState().daySettings.kolomna.start).toBe('10:00');
+    expect(useExplorer.getState().daySettings.podmoskovye.start).toBe('10:00');
     expect(useExplorer.getState().daySettings.karelia.start).toBe('08:00');
     useExplorer.getState().setRegion('kolomna');
     useExplorer.getState().setDaySettings({ end: '17:00' }, locationId(a));
@@ -107,7 +107,7 @@ describe('one-day plans', () => {
       start: '10:00',
       end: '17:00',
     });
-    expect(useExplorer.getState().daySettings.kolomna.end).toBe(defaultDay.end);
+    expect(useExplorer.getState().daySettings.podmoskovye.end).toBe(defaultDay.end);
   });
   it('shortlists at most three videos along the route in the same location', () => {
     const candidates = [

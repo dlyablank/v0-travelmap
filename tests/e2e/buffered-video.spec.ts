@@ -1,9 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { places as demoPlaces } from '../../lib/data';
 
 async function openKolomna(page: Page, mobile: boolean) {
   await page.route('https://tiles.openfreemap.org/**', (r) => r.abort());
   await page.goto('/');
-  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
+  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('podmoskovye');
   if (mobile) await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await page
     .getByRole('button', { name: 'Открыть Стены Коломенского кремля', exact: true })
@@ -113,13 +114,48 @@ test('poster stays visible while loading, then fades after the first video frame
   }
 });
 
-test('a map card opens the shared reel and closing restores the current place', async ({
-  page,
-}) => {
+type MapCameraFiber = {
+  return?: MapCameraFiber;
+  memoizedState?: {
+    memoizedState?: { current?: { jumpTo?: (camera: object) => void; getCenter?: () => void } };
+    next?: MapCameraFiber['memoizedState'];
+  };
+};
+
+test('a map card opens the shared reel and closing restores the current place', async ({ page }) => {
   await page.route('https://tiles.openfreemap.org/**', (r) => r.abort());
   await page.goto('/');
-  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
-  await page.getByRole('button', { name: 'Показать Улица Лажечникова', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('podmoskovye');
+  const street = demoPlaces.find((place) => place.id === 'kolomna-lazhechnikova')!;
+  const showStreet = page.getByRole('button', { name: 'Показать Улица Лажечникова', exact: true });
+  await expect(page.locator('.maplibregl-map')).toBeVisible();
+  const zoomToStreet = () =>
+    page.evaluate(({ latitude, longitude }) => {
+      const root = document.querySelector('.maplibregl-map') as unknown as Record<
+        string,
+        MapCameraFiber
+      >;
+      if (!root) throw new Error('map missing');
+      const fiberKey = Object.keys(root).find((key) => key.startsWith('__reactFiber'));
+      let fiber = fiberKey ? root[fiberKey] : undefined;
+      for (let i = 0; i < 40 && fiber; i += 1, fiber = fiber.return) {
+        let hook = fiber.memoizedState;
+        while (hook) {
+          const map = hook.memoizedState && hook.memoizedState.current;
+          if (map && map.jumpTo && map.getCenter) {
+            map.jumpTo({ center: [longitude, latitude], zoom: 16 });
+            return;
+          }
+          hook = hook.next;
+        }
+      }
+      throw new Error('map camera missing');
+    }, street);
+  await zoomToStreet();
+  await page.waitForTimeout(1200);
+  await zoomToStreet();
+  await expect(showStreet).toBeVisible();
+  await showStreet.click();
   await page.getByRole('button', { name: 'Смотреть видео', exact: true }).click();
   const reel = page.getByRole('dialog', { name: 'Видео путешествий' });
   await expect(reel.locator('video')).toHaveCount(2);

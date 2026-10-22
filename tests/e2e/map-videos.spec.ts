@@ -10,7 +10,7 @@ test('map previews play within budget and hand playback to the selected card', a
   if (testInfo.project.name === 'mobile') {
     const map = (await page.locator('.map-panel').boundingBox())!;
     expect(Math.abs(map.y + map.height - page.viewportSize()!.height)).toBeLessThan(2);
-    await expect(page.getByRole('navigation', { name: 'Действия на телефоне' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Смотреть видеоленту' })).toBeVisible();
   }
   const videoMarkers = page.locator('.priority-video');
   await expect(videoMarkers).toHaveCount(14);
@@ -69,6 +69,7 @@ test('map previews play within budget and hand playback to the selected card', a
   await expect(previews).toHaveCount(0);
   await toggle.click();
   await expect.poll(() => previews.count()).toBeGreaterThan(0);
+  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('karelia');
   await page.getByRole('button', { name: 'Показать Нижний водопад Койриноя', exact: true }).click();
   await expect
     .poll(() =>

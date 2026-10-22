@@ -28,7 +28,7 @@ import {
   Info,
 } from 'lucide-react';
 import { places as demoPlaces } from '@/lib/data';
-import { regions, getRegion } from '@/lib/regions';
+import { regions, getRegion, normalizePlace } from '@/lib/regions';
 import { locationId as placeLocationId, locationGroups } from '@/lib/locations';
 import { categories, type Place, type RouteResult } from '@/lib/types';
 import { haversine } from '@/lib/routing';
@@ -148,10 +148,10 @@ export default function Explorer() {
     regionId,
     syncLocations,
   } = useExplorer();
-  const [mapRegionId, setMapRegionId] = useState('karelia');
+  const [mapRegionId, setMapRegionId] = useState('podmoskovye');
   const [focusRequest, setFocusRequest] = useState(0);
   const [savedLocation, setSavedLocation] = useState('');
-  const [radiusRegion, setRadiusRegion] = useState('karelia');
+  const [radiusRegion, setRadiusRegion] = useState('podmoskovye');
   const [mobileSearch, setMobileSearch] = useState(false);
   const region = getRegion(mapRegionId);
   const trip = useMemo(
@@ -196,7 +196,9 @@ export default function Explorer() {
     () =>
       Array.from(
         new Map(
-          [...demoPlaces, ...serverPlaces, ...(hydrated ? customPlaces : [])].map((p) => [p.id, p]),
+          [...demoPlaces, ...serverPlaces, ...(hydrated ? customPlaces : [])]
+            .map((place) => normalizePlace(place))
+            .map((p) => [p.id, p]),
         ).values(),
       ),
     [serverPlaces, customPlaces, hydrated],
@@ -204,6 +206,12 @@ export default function Explorer() {
   useEffect(() => {
     if (hydrated) syncLocations(allPlaces);
   }, [allPlaces, hydrated, loading, regionId, syncLocations]);
+  useEffect(() => {
+    if (!hydrated) return;
+    const id = getRegion(useExplorer.getState().regionId).id;
+    setMapRegionId(id);
+    setRadiusRegion(id);
+  }, [hydrated]);
   useEffect(() => {
     if (!hydrated || loading) return;
     const id = new URLSearchParams(window.location.search).get('place');
@@ -227,9 +235,7 @@ export default function Explorer() {
   }
   const travelOrigin = useMemo(() => {
     const origin = getRegion(radiusRegion);
-    return radiusRegion === 'karelia'
-      ? { latitude: 61.6991, longitude: 30.6793 }
-      : { latitude: origin.center[1], longitude: origin.center[0] };
+    return { latitude: origin.origin[1], longitude: origin.origin[0] };
   }, [radiusRegion]);
   const radiusOrigin = timeFilter === 'any' ? null : travelOrigin;
   const mapPlaces = useMemo(
@@ -965,12 +971,13 @@ export default function Explorer() {
             </p>
           </div>
           <p className="small-note">
-            Карелия, Коломна и окрестности — {allPlaces.length} мест и{' '}
+            Карелия и Подмосковье — {allPlaces.length} мест и{' '}
             {allPlaces.filter((p) => p.video).length} коротких видео. Коломенские ролики — семь
-            фрагментов двух прогулок Андрея Елбаева с лицензией CC BY 3.0. Автор и источник указаны
-            у каждого видео. Фотографии региона и иллюстрации не заменяют точный вид места. Для
-            островов нужен водный транспорт. Сохранённое хранится в браузере; серверное хранение
-            доступно при подключённой базе.
+            фрагментов двух прогулок Андрея Елбаева с лицензией CC BY 3.0, как она заявлена на
+            Commons. Автор и источник указаны у каждого видео. У остальных мест Подмосковья пока
+            иллюстрация: отдельного ролика нет. Фотографии региона и иллюстрации не заменяют точный
+            вид места. Для островов нужен водный транспорт. Сохранённое хранится в браузере;
+            серверное хранение доступно при подключённой базе.
           </p>
           <Button onClick={() => setAbout(false)}>
             Начать исследовать <ArrowUpRight size={17} />

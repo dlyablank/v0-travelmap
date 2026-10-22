@@ -19,14 +19,16 @@ it('builds a city plan without consuming the other saved cities', () => {
   );
   const ids = selected.map((p) => p.id);
   const city = locationId(selected.find((p) => p.id === 'kolomna-kremlin')!);
-  expect(cityTripStops(ids, places, city, 'kolomna').map((p) => p.id)).toEqual([
+  expect(cityTripStops(ids, places, city, 'podmoskovye').map((p) => p.id)).toEqual([
     'kolomna-kremlin',
     'kolomna-lazhechnikova',
+    'kolomna-golutvin',
   ]);
   expect(ids).toHaveLength(4);
 });
 it('recognises camera regions and stays stable between them', () => {
-  expect(regionAtCenter([38.76, 55.104], 'karelia').id).toBe('kolomna');
+  expect(regionAtCenter([38.76, 55.104], 'karelia').id).toBe('podmoskovye');
   expect(regionAtCenter([32.1, 61.94], 'kolomna').id).toBe('karelia');
-  expect(regionAtCenter([35.43, 58.52], 'karelia').id).toBe('karelia');
+  expect(regionAtCenter([34.75, 58.77], 'karelia').id).toBe('karelia');
+  expect(regionAtCenter([34.75, 58.77], 'podmoskovye').id).toBe('podmoskovye');
 });

@@ -159,7 +159,7 @@ test('empty, single stop and invalid day have useful states', async ({ page }) =
   await page.getByRole('link', { name: 'Найти места' }).click();
   await expect(page).toHaveURL('/');
   await expect(page.locator('.map-nudge')).toHaveCount(0);
-  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
+  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('podmoskovye');
   if (await page.getByRole('button', { name: 'Исследовать', exact: true }).isVisible())
     await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await page

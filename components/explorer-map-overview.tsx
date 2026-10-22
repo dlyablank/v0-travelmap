@@ -358,7 +358,21 @@ export default function ExplorerMap({
         if (!state.active && !state.route && !state.pickMode) {
           const padding = { top: Math.min(130, height / 4), bottom: 40, left: 12, right: 60 };
           let view = { center: region.center, zoom: region.zoom, padding };
-          if (videos.length) {
+          if (!region.fitToVideos) {
+            const towns = places.filter((p) => inRegion(p, region));
+            if (towns.length) {
+              const townBounds = new maplibregl.LngLatBounds();
+              towns.forEach((p) => townBounds.extend([p.longitude, p.latitude]));
+              const fitted = m.cameraForBounds(townBounds, {
+                padding,
+                maxZoom: region.previewZoom,
+              });
+              if (fitted?.center && fitted.zoom !== undefined) {
+                const center = maplibregl.LngLat.convert(fitted.center);
+                view = { center: [center.lng, center.lat], zoom: fitted.zoom, padding };
+              }
+            }
+          } else if (region.fitToVideos && videos.length) {
             const bounds = new maplibregl.LngLatBounds();
             videos.forEach((p) => bounds.extend([p.longitude, p.latitude]));
             const initial = m.cameraForBounds(bounds, { padding, maxZoom: region.previewZoom });
@@ -396,8 +410,14 @@ export default function ExplorerMap({
           btn.className = 'map-cluster';
           btn.setAttribute('aria-label', `Приблизить ${props.point_count} мест`);
           const photoPlaces = places.filter((p) => !p.video);
-          const sample =
-            photoPlaces.find((p) => Math.abs(p.longitude - coords[0]) < 2) || photoPlaces[0];
+          const sample = photoPlaces.reduce<Place | undefined>((best, place) => {
+            if (!best) return place;
+            const bestDistance =
+              (best.longitude - coords[0]) ** 2 + (best.latitude - coords[1]) ** 2;
+            const distance =
+              (place.longitude - coords[0]) ** 2 + (place.latitude - coords[1]) ** 2;
+            return distance < bestDistance ? place : best;
+          }, undefined);
           if (sample) {
             const img = document.createElement('img');
             img.src = sample.thumbnailUrl;
@@ -614,7 +634,7 @@ export default function ExplorerMap({
       )}
       <div className="map-region">
         <span className="live-dot" />
-        {region.id === 'karelia' ? 'КАРЕЛИЯ' : 'КОЛОМНА'}, РОССИЯ <span>↗</span>
+        {region.name.toUpperCase()}, РОССИЯ <span>↗</span>
       </div>
       <div className="map-controls">
         <button aria-label="Увеличить масштаб" onClick={() => map.current?.zoomIn()}>

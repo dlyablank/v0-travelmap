@@ -57,7 +57,7 @@ test('MapGL keeps geographic HTML players and one map across panning, updates an
       element.dataset.retained = 'original';
     }),
   );
-  for (const region of ['kolomna', 'karelia']) {
+  for (const region of ['podmoskovye', 'karelia']) {
     await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption(region);
     await expect(canvas).toHaveAttribute('data-instance', 'original');
     await expect(page.locator('.priority-video[data-retained="original"]')).toHaveCount(14);

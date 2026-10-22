@@ -1,6 +1,7 @@
 import type { Place, Category } from './types';
 import { demoVideos } from './demo-videos';
 import { kolomnaPlaces } from './kolomna-data';
+import { podmoskovyePlaces } from './podmoskovye-data';
 // Coordinates mark the named landmark (not hotel entrances or invented businesses).
 const points: [string, string, number, number, string, Category, string, number][] = [
   [
@@ -315,5 +316,6 @@ export const places: Place[] = [
       `https://commons.wikimedia.org/w/index.php?search=${encodeURIComponent(name)}&title=Special:MediaSearch&type=image`,
   })),
   ...kolomnaPlaces,
+  ...podmoskovyePlaces,
 ];
 export const placeById = Object.fromEntries(places.map((p) => [p.id, p]));

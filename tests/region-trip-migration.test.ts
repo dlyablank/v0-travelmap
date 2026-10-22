@@ -17,6 +17,7 @@ beforeEach(() =>
     regionLocations: {},
     unassignedStops: [],
     daySettings: {},
+    customPlaces: [],
   }),
 );
 it('merges city buckets once, preserves current order/settings and does not resurrect removals', () => {
@@ -92,4 +93,72 @@ it('preserves deferred ids during visible deletion/reorder and later metadata ar
   expect(useExplorer.getState().trip).toEqual([b.id, 'late']);
   expect(useExplorer.getState().trip).not.toContain(a.id);
   expect(useExplorer.getState().unassignedStops).toEqual([]);
+});
+it('moves a saved Kolomna region to Podmoskovye and does not restore a removed stop', () => {
+  const suburb = `${encodeURIComponent('Коломна и окрестности')}::${encodeURIComponent('Окраина Коломны')}`;
+  const kolomna = locationId(places.find((p) => p.id === 'kolomna-golutvin')!);
+  useExplorer.setState({
+    regionId: 'kolomna',
+    regionTripsMigrated: true,
+    locationsMigrated: true,
+    trip: ['kolomna-kremlin', 'kolomna-zaraysk'],
+    regionTrips: {
+      karelia: ['suisaari'],
+      kolomna: ['kolomna-kremlin', 'kolomna-zaraysk'],
+    },
+    locationId: suburb,
+    locationTrips: { [suburb]: ['kolomna-golutvin'] },
+    regionLocations: { kolomna: suburb },
+    daySettings: {
+      kolomna: { start: '10:00', end: '18:00', visits: {} },
+    },
+    customPlaces: [
+      {
+        ...c,
+        id: 'custom-bobrenevo',
+        region: 'Коломна и окрестности',
+        city: 'Старое Бобренево',
+      },
+    ],
+  });
+  useExplorer.getState().syncLocations(places);
+  const migrated = useExplorer.getState();
+  expect(migrated.regionId).toBe('podmoskovye');
+  expect(migrated.trip).toEqual(['kolomna-kremlin', 'kolomna-zaraysk']);
+  expect(migrated.regionTrips.kolomna).toBeUndefined();
+  expect(migrated.regionTrips.karelia).toEqual(['suisaari']);
+  expect(migrated.locationId).toBe(kolomna);
+  expect(migrated.regionLocations.podmoskovye).toBe(kolomna);
+  expect(migrated.regionLocations.kolomna).toBeUndefined();
+  expect(migrated.daySettings.podmoskovye.start).toBe('10:00');
+  expect(migrated.daySettings.kolomna).toBeUndefined();
+  expect(migrated.customPlaces[0]).toMatchObject({
+    id: 'custom-bobrenevo',
+    region: 'Подмосковье',
+    city: 'Коломна',
+  });
+  useExplorer.getState().toggleTrip('kolomna-zaraysk');
+  useExplorer.getState().syncLocations(places);
+  expect(useExplorer.getState().trip).toEqual(['kolomna-kremlin']);
+  useExplorer.getState().syncLocations(places);
+  expect(useExplorer.getState().trip).toEqual(['kolomna-kremlin']);
+  expect(useExplorer.getState().regionTrips.podmoskovye).toEqual(['kolomna-kremlin']);
+});
+it('keeps existing Podmoskovye stops ahead of legacy Kolomna ids', () => {
+  useExplorer.setState({
+    regionId: 'podmoskovye',
+    regionTripsMigrated: true,
+    locationsMigrated: true,
+    trip: ['kolomna-pastila'],
+    regionTrips: {
+      podmoskovye: ['kolomna-pastila'],
+      kolomna: ['kolomna-kremlin', 'kolomna-pastila'],
+    },
+  });
+  useExplorer.getState().syncLocations(places);
+  expect(useExplorer.getState().regionId).toBe('podmoskovye');
+  expect(useExplorer.getState().trip).toEqual(['kolomna-pastila', 'kolomna-kremlin']);
+  expect(useExplorer.getState().regionTrips.kolomna).toBeUndefined();
+  useExplorer.getState().syncLocations(places);
+  expect(useExplorer.getState().trip).toEqual(['kolomna-pastila', 'kolomna-kremlin']);
 });

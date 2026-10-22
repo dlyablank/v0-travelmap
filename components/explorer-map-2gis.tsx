@@ -212,7 +212,10 @@ export default function TwoGisMap(
       const regionPlaces = places.filter((place) => inRegion(place, region));
       const videos = regionPlaces.filter((place) => place.video);
       const bounds = mapBounds(
-        (videos.length ? videos : regionPlaces).map((p) => [p.longitude, p.latitude]),
+        (region.fitToVideos && videos.length ? videos : regionPlaces).map((p) => [
+          p.longitude,
+          p.latitude,
+        ]),
       );
       framing = true;
       const animation = { animate: !first && !motion.matches, duration: 1000 };
@@ -483,7 +486,7 @@ export default function TwoGisMap(
       <div className="overview-label">2ГИС{!session ? ' · загрузка…' : ''}</div>
       <div className="map-region">
         <span className="live-dot" />
-        {props.region.id === 'karelia' ? 'КАРЕЛИЯ' : 'КОЛОМНА'}, РОССИЯ <span>↗</span>
+        {props.region.name.toUpperCase()}, РОССИЯ <span>↗</span>
       </div>
       <div className="map-controls">
         <button

@@ -83,7 +83,7 @@ test('one-day timeline includes visits, recalculates order, and adds at most thr
     });
   });
   await page.goto('/');
-  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
+  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('podmoskovye');
   if (isMobile) await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   for (const name of ['Стены Коломенского кремля', 'Улица Лажечникова']) {
     await page.getByRole('button', { name: `Сохранить ${name}`, exact: true }).click();

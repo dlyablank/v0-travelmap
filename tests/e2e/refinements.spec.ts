@@ -19,7 +19,7 @@ test('map navigation only changes the camera; collection is global and mobile ch
   await setup(page);
   await page.goto('/');
   await expect(page.locator('.priority-video')).toHaveCount(14);
-  await expect(page.locator('.place-card')).toHaveCount(38);
+  await expect(page.locator('.place-card')).toHaveCount(places.length);
   if (isMobile) {
     const box = (await page.locator('.map-panel').boundingBox())!;
     expect(box.y).toBeLessThanOrEqual(104);
@@ -30,7 +30,7 @@ test('map navigation only changes the camera; collection is global and mobile ch
     await action.click();
     await expect(action).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.active-preview')).toHaveCount(0);
-    await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
+    await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('podmoskovye');
     const other = page
       .locator('.priority-video[data-place-id^="kolomna-"][data-map-video-visible="true"]')
       .first();
@@ -55,7 +55,7 @@ test('map navigation only changes the camera; collection is global and mobile ch
   await expect(page.locator('.selected-stops')).toHaveCount(0);
   await page.getByRole('button', { name: 'Природа', exact: true }).click();
   const count = await page.locator('.place-card').count();
-  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('kolomna');
+  await page.getByRole('combobox', { name: 'Регион путешествия' }).selectOption('podmoskovye');
   await expect(page.locator('.place-card')).toHaveCount(count);
   await expect(page.getByRole('button', { name: 'Природа', exact: true })).toHaveClass(/active/);
   await page.evaluate(() =>
@@ -150,10 +150,10 @@ test('trip dashboard groups every city and a city route preserves the rest', asy
     ids,
   );
   await page.goto('/trip');
-  await expect(page.locator('.trip-city-card')).toHaveCount(3);
+  await expect(page.locator('.trip-city-card')).toHaveCount(2);
   await expect(page.locator('.trip-city-place')).toHaveCount(4);
   await page.getByRole('link', { name: 'Составить маршрут: Коломна', exact: true }).click();
-  await expect(page.locator('.stops > li')).toHaveCount(2);
+  await expect(page.locator('.stops > li')).toHaveCount(3);
   await expect(page.getByRole('combobox', { name: 'Город поездки' })).toHaveValue(
     locationId(places.find((p) => p.id === 'kolomna-kremlin')!),
   );
@@ -170,14 +170,17 @@ test('trip dashboard groups every city and a city route preserves the rest', asy
         distance: 1000,
         duration: 600,
         source: 'osrm',
-        legs: [{ distance: 1000, duration: 600 }],
+        legs: [
+          { distance: 1000, duration: 600 },
+          { distance: 1000, duration: 600 },
+        ],
       },
     });
   });
   await page.getByRole('button', { name: 'Собрать маршрут', exact: true }).click();
-  await expect.poll(() => requested).toBe(2);
+  await expect.poll(() => requested).toBe(3);
   await page.getByRole('button', { name: 'Все города и добавленные места', exact: true }).click();
-  await expect(page.locator('.trip-city-card')).toHaveCount(3);
+  await expect(page.locator('.trip-city-card')).toHaveCount(2);
   await expect(page.locator('.trip-city-place')).toHaveCount(4);
   await page.screenshot({
     path: `/tmp/trips-grouped-${page.viewportSize()!.width}.png`,

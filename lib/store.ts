@@ -4,7 +4,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Place } from './types';
 import { locationId } from './locations';
 import { defaultDay, type DaySettings } from './day-plan';
-import { getRegion, regions } from './regions';
+import { regionIdForPlace, regions, canonicalRegionId } from './regions';
+import { migrateExplorerState } from './region-migration';
 type State = {
   locationId: string;
   locationTrips: Record<string, string[]>;
@@ -63,35 +64,47 @@ export const useExplorer = create<State>()(
         ),
       syncLocations: (places) =>
         set((s) => {
+          const base = migrateExplorerState(s);
+          const migrationChanged =
+            base.regionId !== s.regionId ||
+            base.locationId !== s.locationId ||
+            base.trip !== s.trip ||
+            JSON.stringify(base.regionTrips) !== JSON.stringify(s.regionTrips) ||
+            JSON.stringify(base.daySettings) !== JSON.stringify(s.daySettings) ||
+            JSON.stringify(base.regionLocations) !== JSON.stringify(s.regionLocations) ||
+            JSON.stringify(base.locationTrips) !== JSON.stringify(s.locationTrips) ||
+            JSON.stringify(base.customPlaces) !== JSON.stringify(s.customPlaces);
           const regional = {
-            ...s.regionTrips,
-            ...(s.regionTripsMigrated ? { [s.regionId]: s.trip } : {}),
+            ...base.regionTrips,
+            ...(base.regionTripsMigrated ? { [base.regionId]: base.trip } : {}),
           };
-          const settings = { ...s.daySettings };
+          const settings = { ...base.daySettings };
           const pending = new Set(s.unassignedStops);
-          const regionOf = (place: Place) => regions.find((r) => r.name === place.region)?.id;
+          const regionOf = (place: Place) => regionIdForPlace(place);
           const append = (region: string, ids: string[]) => {
             regional[region] = [...new Set([...(regional[region] || []), ...ids])];
           };
-          if (!s.regionTripsMigrated) {
-            const buckets = { ...s.locationTrips };
+          if (!base.regionTripsMigrated) {
+            const buckets = { ...base.locationTrips };
             const removed = new Set(
-              s.locationsMigrated && s.locationId
-                ? (buckets[s.locationId] || []).filter((id) => !s.trip.includes(id))
+              s.locationsMigrated && base.locationId
+                ? (buckets[base.locationId] || []).filter((id) => !base.trip.includes(id))
                 : [],
             );
-            if (s.locationsMigrated && s.locationId) buckets[s.locationId] = s.trip;
+            if (s.locationsMigrated && base.locationId) buckets[base.locationId] = base.trip;
             for (const id of removed) pending.delete(id);
             for (const key of Object.keys(regional))
               regional[key] = regional[key].filter((id) => !removed.has(id));
             // Current visible order is newest; append other cities without sorting it away.
-            const current = s.trip.filter((id) => {
+            const current = base.trip.filter((id) => {
               const p = places.find((p) => p.id === id);
-              return !p || regionOf(p) === s.regionId;
+              return !p || regionOf(p) === base.regionId;
             });
-            regional[s.regionId] = [...new Set([...current, ...(regional[s.regionId] || [])])];
+            regional[base.regionId] = [
+              ...new Set([...current, ...(regional[base.regionId] || [])]),
+            ];
             const sources: [string | undefined, string[]][] = [
-              [undefined, s.trip],
+              [undefined, base.trip],
               ...Object.entries(regional),
               ...Object.entries(buckets).map(([key, ids]): [string | undefined, string[]] => [
                 regions.find((r) => encodeURIComponent(r.name) === key.split('::')[0])?.id,
@@ -107,7 +120,7 @@ export const useExplorer = create<State>()(
               }
             for (const r of regions)
               if (!settings[r.id]) {
-                const oldKey = r.id === s.regionId ? s.locationId : s.regionLocations[r.id];
+                const oldKey = r.id === base.regionId ? base.locationId : base.regionLocations[r.id];
                 const fallback = Object.keys(settings).find((key) =>
                   key.startsWith(`${encodeURIComponent(r.name)}::`),
                 );
@@ -132,42 +145,46 @@ export const useExplorer = create<State>()(
               append(owner, [id]);
             }
           }
-          const prefix = getRegion(s.regionId).name;
-          const candidates = places.filter((p) => p.region === prefix);
+          const candidates = places.filter((p) => regionIdForPlace(p) === base.regionId);
           const desired =
-            s.locationId ||
-            s.regionLocations[s.regionId] ||
+            base.locationId ||
+            base.regionLocations[base.regionId] ||
             (candidates[0] ? locationId(candidates[0]) : '');
           if (
-            s.regionTripsMigrated &&
-            desired === s.locationId &&
+            !migrationChanged &&
+            base.regionTripsMigrated &&
+            desired === base.locationId &&
             unassigned.length === pending.size
           )
             return {};
           return {
+            regionId: base.regionId,
             locationId: desired,
+            locationTrips: base.locationTrips,
             regionTrips: regional,
-            trip: regional[s.regionId] || [],
+            trip: regional[base.regionId] || [],
             regionTripsMigrated: true,
             daySettings: settings,
             locationsMigrated: true,
             unassignedStops: unassigned,
-            regionLocations: { ...s.regionLocations, [s.regionId]: desired },
+            regionLocations: { ...base.regionLocations, [base.regionId]: desired },
+            customPlaces: base.customPlaces,
           };
         }),
-      regionId: 'karelia',
+      regionId: 'podmoskovye',
       regionTrips: {},
       setRegion: (regionId) =>
-        set((s) =>
-          s.regionId === regionId
+        set((s) => {
+          const id = canonicalRegionId(regionId);
+          return s.regionId === id
             ? {}
             : {
-                regionId,
-                locationId: s.regionLocations[regionId] || '',
-                trip: s.regionTrips[regionId] || [],
+                regionId: id,
+                locationId: s.regionLocations[id] || '',
+                trip: s.regionTrips[id] || [],
                 regionTrips: { ...s.regionTrips, [s.regionId]: s.trip },
-              },
-        ),
+              };
+        }),
       trip: [],
       durationDays: 1,
       transportMode: 'car',
@@ -210,6 +227,10 @@ export const useExplorer = create<State>()(
       name: 'weekend-explorer-v1',
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
+      merge: (persisted, current) => {
+        if (!persisted || typeof persisted !== 'object') return current;
+        return { ...current, ...migrateExplorerState(persisted as Partial<State>) };
+      },
     },
   ),
 );

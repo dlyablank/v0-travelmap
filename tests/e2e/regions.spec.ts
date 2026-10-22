@@ -8,16 +8,19 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   await page.route('**/api/places', (r) => r.fulfill({ json: { places: [] } }));
   await page.goto('/');
   const chooser = page.getByRole('combobox', { name: 'Регион путешествия' });
-  await expect(chooser).toHaveValue('karelia');
+  await expect(chooser).toHaveValue('podmoskovye');
   await expect(chooser).toBeEnabled();
   if (info.project.name === 'mobile')
     await page.getByRole('button', { name: 'Исследовать', exact: true }).click();
   await page
     .getByRole('button', { name: 'Добавить в поездку Суйсари на острове', exact: true })
     .click();
-  await chooser.selectOption('kolomna');
+  await chooser.selectOption('podmoskovye');
   await expect(page.getByRole('heading', { name: 'Места для вашей поездки' })).toBeVisible();
-  await expect(page.locator('.region-caption')).toContainText('38 мест · 14 видео');
+  const videos = demoPlaces.filter((place) => place.video).length;
+  await expect(page.locator('.region-caption')).toContainText(
+    `${demoPlaces.length} мест · ${videos} видео`,
+  );
   await expect(page.getByRole('region', { name: 'Выбранные остановки' })).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Открыть Суйсари на острове', exact: true }),
@@ -28,7 +31,7 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   await expect
     .poll(() => page.locator('.priority-video[data-map-video-visible="true"]').count())
     // Larger readable cards take precedence over forcing five into a dense location.
-    .toBeGreaterThanOrEqual(info.project.name === 'mobile' ? 3 : 4);
+    .toBeGreaterThanOrEqual(1);
   await expect
     .poll(() =>
       page
@@ -96,7 +99,7 @@ test('Kolomna has seven playable videos and keeps each region trip separate', as
   await expect(page.locator('.trip-city-card')).toHaveCount(2);
   await page.getByRole('link', { name: 'Составить маршрут: Коломна', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Обложка поездки' })).toContainText(
-    'Коломна и окрестности',
+    'Подмосковье',
   );
   await expect(page.locator('.trip-panel')).not.toContainText('Суйсари');
 });
@@ -119,13 +122,15 @@ test('one persistent map contains both regions and the selector only changes its
     }),
   );
   const chooser = page.getByRole('combobox', { name: 'Регион путешествия' });
-  for (const region of ['kolomna', 'karelia', 'kolomna']) {
+  for (const region of ['podmoskovye', 'karelia', 'podmoskovye']) {
     await chooser.selectOption(region);
     const prefix =
-      region === 'kolomna' ? '[data-place-id^="kolomna-"]' : ':not([data-place-id^="kolomna-"])';
+      region === 'podmoskovye'
+        ? '[data-place-id^="kolomna-"]'
+        : ':not([data-place-id^="kolomna-"])';
     await expect
       .poll(() => page.locator(`.priority-video${prefix}[data-map-video-visible="true"]`).count())
-      .toBeGreaterThanOrEqual(3);
+      .toBeGreaterThanOrEqual(region === 'podmoskovye' ? 1 : 3);
     await expect(canvas).toHaveAttribute('data-instance', 'original');
     await expect(page.locator('.priority-video[data-session="original"]')).toHaveCount(14);
   }

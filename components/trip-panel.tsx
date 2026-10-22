@@ -24,6 +24,7 @@ import { cityTripStops } from '@/lib/trip-collection';
 import { useExplorer } from '@/lib/store';
 import { locationGroups, locationId as placeLocationId } from '@/lib/locations';
 import { regions, getRegion } from '@/lib/regions';
+import { cityTravelNote } from '@/lib/podmoskovye-data';
 import { dayPlan, defaultDay, clockLabel } from '@/lib/day-plan';
 import { optimizeStops } from '@/lib/routing';
 import { distanceLabel, timeLabel } from '@/lib/utils';
@@ -66,6 +67,7 @@ export function TripPanel({
   const locationId = cityId || regionId;
   const city = cityId ? locationGroups(places).find((group) => group.id === cityId) : undefined;
   const destinationName = city?.name || region.name;
+  const travelNote = cityTravelNote(city?.name || '', city?.region || '');
   const stops = useMemo(
     () => cityTripStops(trip, places, cityId, regionId),
     [trip, places, cityId, regionId],
@@ -240,6 +242,7 @@ export function TripPanel({
           <h2>
             Моя поездка<span>{stops.length}</span>
           </h2>
+          {travelNote && <p className="trip-city-note">{travelNote}</p>}
         </div>
         <button className="icon-button" aria-label="Вернуться к местам" onClick={onClose}>
           <ArrowLeft size={22} />

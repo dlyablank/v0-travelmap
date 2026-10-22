@@ -7,7 +7,9 @@ import { places as demoPlaces } from '@/lib/data';
 import { useExplorer } from '@/lib/store';
 import { collectedTripIds } from '@/lib/trip-collection';
 import { locationGroups } from '@/lib/locations';
-import { regions } from '@/lib/regions';
+import { normalizePlace, regions } from '@/lib/regions';
+import { cityTravelNote } from '@/lib/podmoskovye-data';
+import { rewriteLocationKey } from '@/lib/region-migration';
 import type { Place, RouteResult } from '@/lib/types';
 import { TripPanel } from './trip-panel';
 import { PlaceImage } from './place-image';
@@ -15,7 +17,7 @@ import { PlaceImage } from './place-image';
 export function TripPage() {
   const router = useRouter();
   const search = useSearchParams();
-  const cityId = search.get('city');
+  const cityId = rewriteLocationKey(search.get('city') || '');
   const state = useExplorer();
   const { customPlaces, regionId } = state;
   const [serverPlaces, setServerPlaces] = useState<Place[]>([]);
@@ -44,7 +46,9 @@ export function TripPage() {
     () =>
       Array.from(
         new Map(
-          [...demoPlaces, ...serverPlaces, ...customPlaces].map((place) => [place.id, place]),
+          [...demoPlaces, ...serverPlaces, ...customPlaces]
+            .map((place) => normalizePlace(place))
+            .map((place) => [place.id, place]),
         ).values(),
       ),
     [serverPlaces, customPlaces],
@@ -150,6 +154,9 @@ export function TripPage() {
                   {group.places.length} мест · {group.places.filter((place) => place.video).length}{' '}
                   видео
                 </p>
+                {cityTravelNote(group.name, group.region) && (
+                  <p className="trip-city-note">{cityTravelNote(group.name, group.region)}</p>
+                )}
               </div>
               <Link
                 href={`/trip?city=${encodeURIComponent(group.id)}`}
